@@ -1,13 +1,55 @@
-import { useState, useEffect, useCallback, useRef } from 'react';
+﻿import { useState, useEffect, useCallback, useRef } from 'react';
 import ReactQuill from 'react-quill-new';
 import { 
   Search, Tag, FileText, Calendar, Paperclip, X, BookOpen, 
-  MessageSquare, Users, Plus, Copy, Lock, Globe, Trash2, Edit2, CheckCircle2, AlertCircle, Download, LogOut, Heart, Bell
+  MessageSquare, Users, Plus, Copy, Lock, Globe, Trash2, Edit2, CheckCircle2, AlertCircle, Download, LogOut, Heart, Bell, HelpCircle
 } from 'lucide-react';
 import 'react-quill-new/dist/quill.snow.css';
+import { comunicadosService, scriptsService, notificacoesService } from '../services/api';
+import backgroundImage from '../assets/atendenteDash.png';
+
+// Registrar fontes personalizadas no Quill
+const Font = ReactQuill.Quill.import('formats/font');
+Font.whitelist = [
+  'sans-serif', 
+  'serif', 
+  'monospace',
+  'arial',
+  'georgia',
+  'impact',
+  'tahoma',
+  'times-new-roman',
+  'verdana',
+  'roboto',
+  'open-sans',
+  'lato',
+  'montserrat',
+  'poppins',
+  'raleway',
+  'ubuntu'
+];
+ReactQuill.Quill.register(Font, true);
 
 const modulosQuillSimples = {
   toolbar: [
+    [{ 'font': [
+      'sans-serif',
+      'serif', 
+      'monospace',
+      'arial',
+      'georgia',
+      'impact',
+      'tahoma',
+      'times-new-roman',
+      'verdana',
+      'roboto',
+      'open-sans',
+      'lato',
+      'montserrat',
+      'poppins',
+      'raleway',
+      'ubuntu'
+    ] }],
     ['bold', 'italic', 'underline'],
     [{ 'list': 'ordered'}, { 'list': 'bullet' }],
     ['link'], 
@@ -48,6 +90,60 @@ export default function DashboardAtendente() {
   const [modalLogoutAberto, setModalLogoutAberto] = useState(false);
   const [despedindo, setDespedindo] = useState(false);
 
+  // Estados para modal de boas-vindas
+  const [modalBoasVindas, setModalBoasVindas] = useState(false);
+  const [etapaBoasVindas, setEtapaBoasVindas] = useState('pergunta'); // 'pergunta' ou 'saudacao'
+  const [nomePreferido, setNomePreferido] = useState('');
+  const [tratamento, setTratamento] = useState(''); // 'masculino' ou 'feminino'
+
+  // Estado para modal de instruções
+  const [modalInstrucoes, setModalInstrucoes] = useState(false);
+
+  // Verificar se é o primeiro acesso (apenas uma vez)
+  useEffect(() => {
+    const jaConfigurou = localStorage.getItem('usuario_configurado');
+    
+    if (!jaConfigurou) {
+      setModalBoasVindas(true);
+      setEtapaBoasVindas('pergunta');
+    } else {
+      // Carregar dados salvos
+      setNomePreferido(localStorage.getItem('nome_preferido') || '');
+      setTratamento(localStorage.getItem('tratamento') || '');
+    }
+  }, []);
+
+  // Função para obter saudação baseada no horário
+  const obterSaudacao = () => {
+    const hora = new Date().getHours();
+    if (hora >= 5 && hora < 12) return 'Bom dia';
+    if (hora >= 12 && hora < 18) return 'Boa tarde';
+    return 'Boa noite';
+  };
+
+  // Função para confirmar nome e tratamento
+  const confirmarNome = () => {
+    if (!nomePreferido.trim() || !tratamento) {
+      mostrarMensagem('Por favor, preencha seu nome e selecione como prefere ser tratado(a)', 'erro');
+      return;
+    }
+    
+    // Salvar preferências (apenas uma vez)
+    localStorage.setItem('nome_preferido', nomePreferido);
+    localStorage.setItem('tratamento', tratamento);
+    localStorage.setItem('usuario_configurado', 'true');
+    
+    setEtapaBoasVindas('saudacao');
+  };
+
+  // Função para fechar modal de boas-vindas
+  const fecharBoasVindas = () => {
+    setModalBoasVindas(false);
+    setEtapaBoasVindas('pergunta');
+    setNomePreferido('');
+    setTratamento('');
+  };
+
   const mostrarMensagem = (texto, tipo = 'sucesso') => {
     setMensagem({ texto, tipo });
     setTimeout(() => setMensagem({ texto: '', tipo: '' }), 5000);
@@ -69,46 +165,63 @@ export default function DashboardAtendente() {
   };
 
   // ==========================================================
-  // BUSCAS NA API (COM CACHE-BUSTER INFALÍVEL)
+  // BUSCAS NA API
   // ==========================================================
   const buscarComunicados = useCallback(async () => {
     try {
-      const response = await fetch(`http://localhost:3000/comunicados?_t=${Date.now()}`);
-      if (response.ok) setListaComunicados(await response.json());
-    } catch (error) { console.error('Erro na busca de comunicados'); }
+      const data = await comunicadosService.listar();
+      setListaComunicados(data);
+    } catch (error) { 
+      console.error('Erro na busca de comunicados:', error.message);
+    }
   }, []);
 
   const buscarScripts = useCallback(async () => {
-    if (!usuarioId) return;
     try {
-      const response = await fetch(`http://localhost:3000/scripts/${usuarioId}?_t=${Date.now()}`);
-      if (response.ok) {
-        const data = await response.json();
-        setListaScripts(data || []);
-      }
-    } catch (error) { console.error('Erro de rede ao buscar scripts'); }
-  }, [usuarioId]);
+      const data = await scriptsService.listar();
+      setListaScripts(data || []);
+    } catch (error) { 
+      console.error('Erro ao buscar scripts:', error.message);
+    }
+  }, []);
 
   const buscarNotificacoes = useCallback(async () => {
-    if (!usuarioId) return;
     try {
-      const response = await fetch(`http://localhost:3000/notificacoes/${usuarioId}?_t=${Date.now()}`);
-      if (response.ok) setNotificacoes(await response.json());
-    } catch (error) { console.error('Erro ao buscar notificações'); }
-  }, [usuarioId]);
+      const data = await notificacoesService.listar();
+      setNotificacoes(data);
+    } catch (error) { 
+      console.error('Erro ao buscar notificações:', error.message);
+    }
+  }, []);
 
-  // Efeito Inicial e Radar de Atualização
+  // Efeito Inicial e Radar de Atualização Otimizado
   useEffect(() => {
     setCarregando(true);
     Promise.all([buscarComunicados(), buscarScripts(), buscarNotificacoes()]).finally(() => setCarregando(false));
 
-    // Radar bate no servidor a cada 5 segundos
+    // Radar atualiza a cada 30 segundos (otimizado)
     const radar = setInterval(() => {
-      buscarNotificacoes();
-      buscarComunicados(); 
-    }, 5000);
+      // Só atualiza se a aba estiver ativa
+      if (!document.hidden) {
+        buscarNotificacoes();
+        buscarComunicados(); 
+      }
+    }, 30000); // 30 segundos
 
-    return () => clearInterval(radar);
+    // Atualizar quando o usuário voltar para a aba
+    const handleVisibilityChange = () => {
+      if (!document.hidden) {
+        buscarNotificacoes();
+        buscarComunicados();
+      }
+    };
+    
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+
+    return () => {
+      clearInterval(radar);
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
+    };
   }, [buscarComunicados, buscarScripts, buscarNotificacoes]);
 
   // ==========================================================
@@ -120,7 +233,7 @@ export default function DashboardAtendente() {
     if (!primeiraCarga.current && naoLidasAtuais > totalNaoLidasAnterior.current) {
       const audio = new Audio('https://assets.mixkit.co/active_storage/sfx/2869/2869-preview.mp3');
       audio.volume = 0.5; 
-      audio.play().catch(e => console.log('O navegador bloqueou o áudio porque o utilizador ainda não clicou na tela.'));
+      audio.play().catch(() => console.log('O navegador bloqueou o áudio porque o usuário ainda não clicou na tela.'));
     }
 
     totalNaoLidasAnterior.current = naoLidasAtuais;
@@ -135,12 +248,10 @@ export default function DashboardAtendente() {
   const registrarLeitura = async (comunicado) => {
     setPublicacaoVisualizada(comunicado); 
     try {
-      await fetch('http://localhost:3000/comunicados/ler', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ usuario_id: usuarioId, comunicado_id: comunicado.id })
-      });
-    } catch (error) { console.log("Rastreio falhou."); }
+      await comunicadosService.registrarLeitura(comunicado.id);
+    } catch (error) { 
+      console.log("Rastreio falhou:", error.message); 
+    }
   };
 
   const toggleCurtida = async (comunicadoId, e) => {
@@ -157,13 +268,9 @@ export default function DashboardAtendente() {
     }));
 
     try {
-      await fetch(`http://localhost:3000/comunicados/${comunicadoId}/curtir`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ usuario_id: usuarioId })
-      });
+      await comunicadosService.curtir(comunicadoId);
     } catch (error) {
-      mostrarMensagem('Erro ao registrar curtida.', 'erro');
+      mostrarMensagem(error.message, 'erro');
       buscarComunicados(); 
     }
   };
@@ -173,7 +280,7 @@ export default function DashboardAtendente() {
 
     if (!notificacao.lida) {
       setNotificacoes(prev => prev.map(n => n.id === notificacao.id ? { ...n, lida: true } : n));
-      fetch(`http://localhost:3000/notificacoes/${notificacao.id}/ler`, { method: 'PUT' }).catch(console.error);
+      notificacoesService.marcarComoLida(notificacao.id).catch(console.error);
     }
 
     if (notificacao.comunicado_id) {
@@ -189,8 +296,49 @@ export default function DashboardAtendente() {
 
   const abrirParaEdicao = (script, e) => { e.stopPropagation(); setTituloScript(script.titulo); setConteudoScript(decodificarHTML(script.conteudo)); setCompartilharScript(script.visivel_equipe); setIdEmEdicaoScript(script.id); setFormScriptAberto(true); window.scrollTo({ top: 0, behavior: 'smooth' }); };
   const cancelarEdicaoScript = () => { setTituloScript(''); setConteudoScript(''); setCompartilharScript(false); setArquivosScript(null); setIdEmEdicaoScript(null); setFormScriptAberto(false); if (fileInputRef.current) fileInputRef.current.value = ""; };
-  const salvarScript = async (e) => { e.preventDefault(); if (!tituloScript || !conteudoScript) return mostrarMensagem('Preencha título e conteúdo', 'erro'); try { const url = idEmEdicaoScript ? `http://localhost:3000/scripts/${idEmEdicaoScript}` : 'http://localhost:3000/scripts'; const metodo = idEmEdicaoScript ? 'PUT' : 'POST'; const formData = new FormData(); formData.append('titulo', tituloScript); formData.append('conteudo', conteudoScript); formData.append('autor_id', usuarioId); formData.append('visivel_equipe', compartilharScript); if (arquivosScript) { Array.from(arquivosScript).forEach(arq => formData.append('arquivos', arq)); } const response = await fetch(url, { method: metodo, body: formData }); if (response.ok) { mostrarMensagem(idEmEdicaoScript ? 'Script atualizado!' : 'Script salvo!'); cancelarEdicaoScript(); buscarScripts(); } else { mostrarMensagem('Falha ao salvar', 'erro'); } } catch (error) { mostrarMensagem('Erro de Rede.', 'erro'); } };
-  const deletarScript = async (id, e) => { e.stopPropagation(); if (!window.confirm("Apagar este script?")) return; try { const response = await fetch(`http://localhost:3000/scripts/${id}`, { method: 'DELETE' }); if (response.ok) { mostrarMensagem('Script apagado.'); buscarScripts(); } } catch (error) { mostrarMensagem('Erro ao apagar.', 'erro'); } };
+  
+  const salvarScript = async (e) => { 
+    e.preventDefault(); 
+    if (!tituloScript || !conteudoScript) return mostrarMensagem('Preencha título e conteúdo', 'erro'); 
+    
+    try { 
+      const formData = new FormData(); 
+      formData.append('titulo', tituloScript); 
+      formData.append('conteudo', conteudoScript); 
+      formData.append('visivel_equipe', compartilharScript); 
+      
+      if (arquivosScript) { 
+        Array.from(arquivosScript).forEach(arq => formData.append('arquivos', arq)); 
+      } 
+      
+      if (idEmEdicaoScript) {
+        await scriptsService.atualizar(idEmEdicaoScript, formData);
+        mostrarMensagem('Script atualizado!');
+      } else {
+        await scriptsService.criar(formData);
+        mostrarMensagem('Script salvo!');
+      }
+      
+      cancelarEdicaoScript(); 
+      buscarScripts(); 
+    } catch (error) { 
+      mostrarMensagem(error.message, 'erro'); 
+    } 
+  };
+  
+  const deletarScript = async (id, e) => { 
+    e.stopPropagation(); 
+    if (!window.confirm("Apagar este script?")) return; 
+    
+    try { 
+      await scriptsService.deletar(id);
+      mostrarMensagem('Script apagado.'); 
+      buscarScripts(); 
+    } catch (error) { 
+      mostrarMensagem(error.message, 'erro'); 
+    } 
+  };
+  
   const copiarParaAreaTransferencia = (html, titulo, e) => { if (e) e.stopPropagation(); const el = document.createElement('div'); el.innerHTML = html; navigator.clipboard.writeText(el.innerText || el.textContent).then(() => mostrarMensagem(`"${titulo}" copiado!`, 'sucesso')).catch(() => mostrarMensagem('Falha.', 'erro')); };
 
   // ==========================================================
@@ -204,7 +352,12 @@ export default function DashboardAtendente() {
   const naoLidas = notificacoes.filter(n => !n.lida).length;
 
   return (
-    <div className="min-h-screen bg-[#F8FAFC] p-4 md:p-8 font-sans text-slate-900 relative pb-24" onClick={() => setPainelNotificacoesAberto(false)}>
+    <div className="min-h-screen bg-[#F8FAFC] p-4 md:p-8 font-sans text-slate-900 relative pb-24" onClick={() => setPainelNotificacoesAberto(false)} style={{
+      backgroundImage: `linear-gradient(rgba(248, 250, 252, 0.92), rgba(248, 250, 252, 0.92)), url(${backgroundImage})`,
+      backgroundSize: 'cover',
+      backgroundPosition: 'center',
+      backgroundAttachment: 'fixed'
+    }}>
       
       {mensagem.texto && (
         <div className="fixed top-8 left-1/2 -translate-x-1/2 z-[100] animate-in slide-in-from-top-10 fade-in duration-300">
@@ -219,12 +372,30 @@ export default function DashboardAtendente() {
         <header className="flex flex-col md:flex-row md:items-center justify-between gap-4 bg-white p-6 md:p-8 rounded-3xl shadow-sm border border-slate-100 relative">
           <div className="flex items-center justify-between w-full md:w-auto gap-4">
             <div className="flex items-center gap-4">
-              <div className="bg-blue-600 p-3 rounded-2xl text-white shadow-lg shadow-blue-200">
+              <div className="bg-[#00A859] p-3 rounded-2xl text-white shadow-lg shadow-[#00A859]/20">
                 <BookOpen size={28} />
               </div>
-              <div>
-                <h1 className="text-2xl font-extrabold tracking-tight text-slate-800">Portal do Atendente</h1>
-                <p className="text-slate-500 text-sm">A sua central de conhecimento e agilidade.</p>
+              <div className="flex-1">
+                <h1 className="text-2xl font-extrabold tracking-tight text-slate-800 flex items-center gap-2">
+                  {nomePreferido ? (
+                    <>
+                      {obterSaudacao()}, {nomePreferido}!
+                      {tratamento && (
+                        <span className="text-2xl">
+                          {tratamento === 'feminino' ? '👩‍💼' : '👨‍💼'}
+                        </span>
+                      )}
+                    </>
+                  ) : (
+                    'Portal do Atendente'
+                  )}
+                </h1>
+                <p className="text-slate-600 font-medium mt-1">
+                  Aqui é o seu dashboard de Atendimento
+                </p>
+                <p className="text-slate-500 text-sm">
+                  Você pode visualizar comunicados, criar scripts pessoais e acessar conteúdos da equipe
+                </p>
               </div>
             </div>
             
@@ -242,11 +413,17 @@ export default function DashboardAtendente() {
           <div className="flex items-center gap-3 w-full md:w-auto relative">
             <div className="relative w-full md:w-72">
               <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400" size={18} />
-              <input type="text" placeholder="Pesquisa rápida..." value={termoBusca} onChange={(e) => setTermoBusca(e.target.value)} className="w-full pl-11 pr-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-blue-500 outline-none text-sm"/>
+              <input type="text" placeholder="Pesquisa rápida..." value={termoBusca} onChange={(e) => setTermoBusca(e.target.value)} className="w-full pl-11 pr-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-[#00A859] outline-none text-sm"/>
             </div>
             
             <div className="hidden md:flex items-center gap-3">
-              <button onClick={(e) => { e.stopPropagation(); setPainelNotificacoesAberto(!painelNotificacoesAberto); }} className="relative p-2.5 text-slate-500 hover:text-blue-600 bg-slate-50 hover:bg-blue-50 border border-transparent hover:border-blue-100 rounded-xl transition-all">
+              <button 
+                onClick={() => setModalInstrucoes(true)}
+                className="flex items-center gap-2 px-4 py-2.5 bg-gradient-to-r from-emerald-500 to-emerald-600 hover:from-emerald-600 hover:to-emerald-700 text-white text-sm font-bold rounded-xl transition-all shadow-lg shadow-emerald-200 hover:shadow-xl hover:shadow-emerald-300 active:scale-95"
+              >
+                <HelpCircle size={18} /> Instruções
+              </button>
+              <button onClick={(e) => { e.stopPropagation(); setPainelNotificacoesAberto(!painelNotificacoesAberto); }} className="relative p-2.5 text-slate-500 hover:text-[#00A859] bg-slate-50 hover:bg-[#00A859]/5 border border-transparent hover:border-[#00A859]100 rounded-xl transition-all">
                 <Bell size={20} />
                 {naoLidas > 0 && (
                   <span className="absolute -top-1 -right-1 w-5 h-5 bg-red-500 text-white text-[10px] font-black flex items-center justify-center rounded-full shadow-sm shadow-red-200 border-2 border-white animate-in zoom-in">
@@ -254,7 +431,7 @@ export default function DashboardAtendente() {
                   </span>
                 )}
               </button>
-              <button onClick={() => setModalLogoutAberto(true)} className="flex items-center gap-2 px-4 py-2.5 bg-red-50 hover:bg-red-100 text-red-600 text-sm font-bold rounded-xl transition-colors border border-red-100 shrink-0">
+              <button onClick={() => setModalLogoutAberto(true)} className="flex items-center gap-2 px-4 py-2.5 bg-gradient-to-r from-red-500 to-red-600 hover:from-red-600 hover:to-red-700 text-white text-sm font-bold rounded-xl transition-all shadow-lg shadow-red-200 hover:shadow-xl hover:shadow-red-300 active:scale-95 shrink-0">
                 <LogOut size={18} /> Sair
               </button>
             </div>
@@ -275,13 +452,13 @@ export default function DashboardAtendente() {
                   ) : (
                     <div className="space-y-1">
                       {notificacoes.map(n => (
-                        <div key={n.id} onClick={(e) => lerNotificacao(n, e)} className={`p-4 rounded-2xl cursor-pointer transition-all border border-transparent relative overflow-hidden ${n.lida ? 'hover:bg-slate-50' : 'bg-blue-50/50 hover:bg-blue-50 hover:border-blue-100'}`}>
-                          {!n.lida && <div className="absolute left-0 top-0 bottom-0 w-1 bg-blue-500"></div>}
+                        <div key={n.id} onClick={(e) => lerNotificacao(n, e)} className={`p-4 rounded-2xl cursor-pointer transition-all border border-transparent relative overflow-hidden ${n.lida ? 'hover:bg-slate-50' : 'bg-[#00A859]/5/50 hover:bg-[#00A859]/5 hover:border-[#00A859]100'}`}>
+                          {!n.lida && <div className="absolute left-0 top-0 bottom-0 w-1 bg-[#00A859]"></div>}
                           <h5 className={`text-sm mb-1 ${n.lida ? 'font-bold text-slate-600' : 'font-extrabold text-slate-900'}`}>{n.titulo}</h5>
                           <p className={`text-xs ${n.lida ? 'text-slate-400' : 'text-slate-600'}`}>{n.mensagem}</p>
                           <div className="flex items-center justify-between mt-2">
                              <span className="text-[10px] text-slate-400 font-bold block">{new Date(n.criado_em).toLocaleDateString('pt-BR')}</span>
-                             {n.comunicado_id && <span className="text-[10px] text-blue-500 font-bold bg-blue-50 px-2 py-0.5 rounded flex items-center gap-1">Ler Agora &rarr;</span>}
+                             {n.comunicado_id && <span className="text-[10px] text-[#00A859] font-bold bg-[#00A859]/5 px-2 py-0.5 rounded flex items-center gap-1">Ler Agora &rarr;</span>}
                           </div>
                         </div>
                       ))}
@@ -293,14 +470,14 @@ export default function DashboardAtendente() {
           </div>
         </header>
 
-        <div className="flex overflow-x-auto hide-scrollbar gap-2 p-1 bg-slate-200/50 rounded-2xl w-fit">
-          <button onClick={() => setAbaAtiva('comunicados')} className={`flex items-center gap-2 px-6 py-3 rounded-xl font-bold text-sm transition-all whitespace-nowrap ${abaAtiva === 'comunicados' ? 'bg-white text-blue-700 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}><FileText size={18}/> Comunicados Oficiais</button>
-          <button onClick={() => setAbaAtiva('meus_scripts')} className={`flex items-center gap-2 px-6 py-3 rounded-xl font-bold text-sm transition-all whitespace-nowrap ${abaAtiva === 'meus_scripts' ? 'bg-white text-blue-700 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}><MessageSquare size={18}/> Meus Scripts</button>
-          <button onClick={() => setAbaAtiva('comunidade')} className={`flex items-center gap-2 px-6 py-3 rounded-xl font-bold text-sm transition-all whitespace-nowrap ${abaAtiva === 'comunidade' ? 'bg-white text-blue-700 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}><Users size={18}/> Scripts da Equipa</button>
+        <div className="flex overflow-x-auto hide-scrollbar gap-2 p-1 bg-white/80 backdrop-blur-sm rounded-2xl w-fit shadow-lg border border-slate-200">
+          <button onClick={() => setAbaAtiva('comunicados')} className={`flex items-center gap-2 px-6 py-3 rounded-xl font-bold text-sm transition-all whitespace-nowrap ${abaAtiva === 'comunicados' ? 'bg-gradient-to-r from-[#00A859] to-[#008C4A] text-white shadow-lg shadow-[#00A859]/20' : 'text-slate-600 hover:bg-slate-50 hover:text-slate-900'}`}><FileText size={18}/> Comunicados Oficiais</button>
+          <button onClick={() => setAbaAtiva('meus_scripts')} className={`flex items-center gap-2 px-6 py-3 rounded-xl font-bold text-sm transition-all whitespace-nowrap ${abaAtiva === 'meus_scripts' ? 'bg-gradient-to-r from-[#00A859] to-[#008C4A] text-white shadow-lg shadow-[#00A859]/20' : 'text-slate-600 hover:bg-slate-50 hover:text-slate-900'}`}><MessageSquare size={18}/> Meus Scripts</button>
+          <button onClick={() => setAbaAtiva('comunidade')} className={`flex items-center gap-2 px-6 py-3 rounded-xl font-bold text-sm transition-all whitespace-nowrap ${abaAtiva === 'comunidade' ? 'bg-gradient-to-r from-[#00A859] to-[#008C4A] text-white shadow-lg shadow-[#00A859]/20' : 'text-slate-600 hover:bg-slate-50 hover:text-slate-900'}`}><Users size={18}/> Scripts da Equipe</button>
         </div>
 
         {carregando ? (
-           <div className="text-center py-20"><div className="h-8 w-8 border-4 border-blue-200 border-t-blue-600 rounded-full animate-spin mx-auto" /></div>
+           <div className="text-center py-20"><div className="h-8 w-8 border-4 border-[#00A859]/30 border-t-blue-600 rounded-full animate-spin mx-auto" /></div>
         ) : (
           <div className="animate-in fade-in slide-in-from-bottom-4 duration-500">
 
@@ -313,13 +490,13 @@ export default function DashboardAtendente() {
 
                     return (
                       <div key={comunicado.id} onClick={() => registrarLeitura(comunicado)} className="group bg-white p-6 rounded-3xl border border-slate-100 cursor-pointer hover:shadow-lg transition-all flex flex-col relative overflow-hidden">
-                        <div className="absolute left-0 top-0 bottom-0 w-1.5 bg-blue-500 opacity-0 group-hover:opacity-100 transition-opacity"></div>
+                        <div className="absolute left-0 top-0 bottom-0 w-1.5 bg-[#00A859] opacity-0 group-hover:opacity-100 transition-opacity"></div>
                         
                         <div>
-                          <h3 className="font-extrabold text-lg text-slate-800 mb-2 group-hover:text-blue-600 transition-colors">{comunicado.titulo}</h3>
+                          <h3 className="font-extrabold text-lg text-slate-800 mb-2 group-hover:text-[#00A859] transition-colors">{comunicado.titulo}</h3>
                           <div className="flex items-center gap-3 text-xs font-bold text-slate-500">
                             <span className="flex items-center gap-1"><Calendar size={14}/> {new Date(comunicado.criado_em).toLocaleDateString()}</span>
-                            <span className="text-blue-500 flex items-center gap-1 bg-blue-50 px-2 py-0.5 rounded"><Tag size={12}/> {comunicado.tags}</span>
+                            <span className="text-[#00A859] flex items-center gap-1 bg-[#00A859]/5 px-2 py-0.5 rounded"><Tag size={12}/> {comunicado.tags}</span>
                             {comunicado.anexos_comunicados?.length > 0 && (
                                <span className="text-emerald-600 flex items-center gap-1 bg-emerald-50 px-2 py-0.5 rounded"><Paperclip size={12}/> {comunicado.anexos_comunicados.length}</span>
                             )}
@@ -329,13 +506,13 @@ export default function DashboardAtendente() {
                         <div className="mt-5 pt-4 border-t border-slate-100 flex justify-between items-center">
                           <button 
                             onClick={(e) => toggleCurtida(comunicado.id, e)} 
-                            className={`flex items-center gap-2 px-3 py-1.5 rounded-lg text-sm font-bold transition-all ${jaCurtiu ? 'text-red-500 bg-red-50 hover:bg-red-100' : 'text-slate-400 bg-slate-50 hover:bg-slate-100 hover:text-red-400'}`}
+                            className={`flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-bold transition-all shadow-sm hover:shadow-md active:scale-95 ${jaCurtiu ? 'text-white bg-gradient-to-r from-red-500 to-red-600 hover:from-red-600 hover:to-red-700 shadow-red-200' : 'text-slate-600 bg-slate-50 hover:bg-gradient-to-r hover:from-red-500 hover:to-red-600 hover:text-white hover:shadow-red-200'}`}
                           >
                             <Heart size={18} className={jaCurtiu ? 'fill-current scale-110 transition-transform' : 'transition-transform'} />
                             {totalCurtidas > 0 ? `${totalCurtidas} Curtidas` : 'Curtir'}
                           </button>
                           
-                          <span className="text-blue-600 text-sm font-bold opacity-0 group-hover:opacity-100 transition-opacity">Ler Comunicado &rarr;</span>
+                          <span className="text-[#00A859] text-sm font-bold opacity-0 group-hover:opacity-100 transition-opacity">Ler Comunicado &rarr;</span>
                         </div>
 
                       </div>
@@ -348,11 +525,11 @@ export default function DashboardAtendente() {
             {abaAtiva === 'meus_scripts' && (
               <div className="space-y-6">
                 {!formScriptAberto ? (
-                  <button onClick={() => setFormScriptAberto(true)} className="w-full py-6 border-2 border-dashed border-slate-300 rounded-3xl text-slate-500 font-bold hover:bg-white hover:border-blue-400 hover:text-blue-600 transition-all flex items-center justify-center gap-2">
+                  <button onClick={() => setFormScriptAberto(true)} className="w-full py-6 border-2 border-dashed border-slate-300 rounded-3xl text-slate-600 font-bold hover:bg-white hover:border-[#00A859] hover:text-[#00A859] hover:shadow-lg hover:shadow-blue-100 transition-all flex items-center justify-center gap-2 active:scale-[0.98]">
                     <Plus size={20}/> Criar Novo Atalho/Script
                   </button>
                 ) : (
-                  <form onSubmit={salvarScript} className={`bg-white p-6 md:p-8 rounded-3xl shadow-lg border animate-in zoom-in-95 ${idEmEdicaoScript ? 'border-orange-200 ring-2 ring-orange-50' : 'border-blue-100'}`}>
+                  <form onSubmit={salvarScript} className={`bg-white p-6 md:p-8 rounded-3xl shadow-lg border animate-in zoom-in-95 ${idEmEdicaoScript ? 'border-orange-200 ring-2 ring-orange-50' : 'border-[#00A859]/20'}`}>
                     <div className="flex justify-between items-center mb-6">
                       <h3 className={`font-bold text-lg ${idEmEdicaoScript ? 'text-orange-600' : 'text-slate-800'}`}>
                         {idEmEdicaoScript ? 'Editar Script' : 'Novo Script'}
@@ -360,7 +537,7 @@ export default function DashboardAtendente() {
                       <button type="button" onClick={cancelarEdicaoScript} className="text-slate-400 hover:text-red-500"><X size={20}/></button>
                     </div>
                     <div className="space-y-4">
-                      <input type="text" placeholder="Título (ex: Saudação de Bom Dia)" value={tituloScript} onChange={e => setTituloScript(e.target.value)} className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-blue-500 outline-none font-bold" required/>
+                      <input type="text" placeholder="Título (ex: Saudação de Bom Dia)" value={tituloScript} onChange={e => setTituloScript(e.target.value)} className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-[#00A859] outline-none font-bold" required/>
                       <div className="border border-slate-200 rounded-xl bg-white overflow-hidden">
                         <ReactQuill theme="snow" value={conteudoScript} onChange={setConteudoScript} modules={modulosQuillSimples} className="min-h-[150px]"/>
                       </div>
@@ -374,12 +551,12 @@ export default function DashboardAtendente() {
                         <label className="flex items-center gap-3 p-4 bg-slate-50 rounded-xl cursor-pointer border border-slate-200 hover:bg-slate-100 transition-colors h-full mt-5">
                           <input type="checkbox" checked={compartilharScript} onChange={e => setCompartilharScript(e.target.checked)} className="w-5 h-5 accent-blue-600 rounded"/>
                           <div className="flex-1">
-                            <p className="font-bold text-sm text-slate-800 flex items-center gap-2">Partilhar com a Equipa {compartilharScript ? <Globe size={16} className="text-blue-500"/> : <Lock size={16} className="text-slate-400"/>}</p>
+                            <p className="font-bold text-sm text-slate-800 flex items-center gap-2">Compartilhar com a Equipe {compartilharScript ? <Globe size={16} className="text-[#00A859]"/> : <Lock size={16} className="text-slate-400"/>}</p>
                           </div>
                         </label>
                       </div>
 
-                      <button type="submit" className={`w-full py-4 text-white font-bold rounded-xl transition-all shadow-md ${idEmEdicaoScript ? 'bg-orange-500 hover:bg-orange-600' : 'bg-blue-600 hover:bg-blue-700'}`}>
+                      <button type="submit" className={`w-full py-4 text-white font-bold rounded-xl transition-all shadow-lg hover:shadow-xl active:scale-[0.98] ${idEmEdicaoScript ? 'bg-gradient-to-r from-orange-500 to-orange-600 hover:from-orange-600 hover:to-orange-700 shadow-orange-200 hover:shadow-orange-300' : 'bg-gradient-to-r from-[#00A859] to-[#008C4A] hover:from-[#008C4A] hover:to-[#00A859] shadow-[#00A859]/20 hover:shadow-[#00A859]/30'}`}>
                         {idEmEdicaoScript ? 'Atualizar Script' : 'Guardar Script'}
                       </button>
                     </div>
@@ -391,8 +568,8 @@ export default function DashboardAtendente() {
                     meusScripts.map(script => (
                       <div key={script.id} onClick={() => setScriptVisualizado(script)} className="bg-white p-6 rounded-3xl border border-slate-200 flex flex-col h-full shadow-sm hover:shadow-md transition-all cursor-pointer group">
                         <div className="flex justify-between items-start mb-4">
-                          <h4 className="font-extrabold text-slate-800 group-hover:text-blue-600 transition-colors">{script.titulo}</h4>
-                          <span title={script.visivel_equipe ? "Público" : "Privado"} className={`p-1.5 rounded-lg ${script.visivel_equipe ? 'bg-blue-50 text-blue-500' : 'bg-slate-100 text-slate-400'}`}>
+                          <h4 className="font-extrabold text-slate-800 group-hover:text-[#00A859] transition-colors">{script.titulo}</h4>
+                          <span title={script.visivel_equipe ? "Público" : "Privado"} className={`p-1.5 rounded-lg ${script.visivel_equipe ? 'bg-[#00A859]/5 text-[#00A859]' : 'bg-slate-100 text-slate-400'}`}>
                             {script.visivel_equipe ? <Globe size={14}/> : <Lock size={14}/>}
                           </span>
                         </div>
@@ -406,13 +583,13 @@ export default function DashboardAtendente() {
                         <div className="flex-1 mb-6 text-sm text-slate-600 line-clamp-2" dangerouslySetInnerHTML={{__html: decodificarHTML(script.conteudo)}} />
                         
                         <div className="flex items-center gap-2 mt-auto pt-4 border-t border-slate-100">
-                          <button onClick={(e) => copiarParaAreaTransferencia(decodificarHTML(script.conteudo), script.titulo, e)} className="flex-1 flex items-center justify-center gap-2 bg-emerald-50 hover:bg-emerald-100 text-emerald-700 font-bold py-2.5 rounded-xl transition-colors">
+                          <button onClick={(e) => copiarParaAreaTransferencia(decodificarHTML(script.conteudo), script.titulo, e)} className="flex-1 flex items-center justify-center gap-2 bg-gradient-to-r from-emerald-500 to-emerald-600 hover:from-emerald-600 hover:to-emerald-700 text-white font-bold py-2.5 rounded-xl transition-all shadow-md shadow-emerald-200 hover:shadow-lg hover:shadow-emerald-300 active:scale-95">
                             <Copy size={16}/> Copiar
                           </button>
-                          <button onClick={(e) => abrirParaEdicao(script, e)} className="p-2.5 bg-orange-50 hover:bg-orange-100 text-orange-600 rounded-xl transition-colors">
+                          <button onClick={(e) => abrirParaEdicao(script, e)} className="p-2.5 bg-orange-50 hover:bg-gradient-to-r hover:from-orange-500 hover:to-orange-600 text-orange-600 hover:text-white rounded-xl transition-all shadow-sm hover:shadow-md hover:shadow-orange-200 active:scale-95">
                             <Edit2 size={16}/>
                           </button>
-                          <button onClick={(e) => deletarScript(script.id, e)} className="p-2.5 bg-red-50 hover:bg-red-100 text-red-500 rounded-xl transition-colors">
+                          <button onClick={(e) => deletarScript(script.id, e)} className="p-2.5 bg-red-50 hover:bg-gradient-to-r hover:from-red-500 hover:to-red-600 text-red-500 hover:text-white rounded-xl transition-all shadow-sm hover:shadow-md hover:shadow-red-200 active:scale-95">
                             <Trash2 size={16}/>
                           </button>
                         </div>
@@ -425,15 +602,15 @@ export default function DashboardAtendente() {
 
             {abaAtiva === 'comunidade' && (
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                {scriptsEquipe.length === 0 ? <p className="text-slate-400 col-span-2 text-center py-10">A equipa ainda não partilhou nenhum script.</p> : 
+                {scriptsEquipe.length === 0 ? <p className="text-slate-400 col-span-2 text-center py-10">A equipe ainda não compartilhou nenhum script.</p> : 
                   scriptsEquipe.map(script => (
-                    <div key={script.id} onClick={() => setScriptVisualizado(script)} className="bg-gradient-to-br from-white to-slate-50 p-6 rounded-3xl border border-blue-100 flex flex-col h-full shadow-sm hover:shadow-md transition-all relative overflow-hidden cursor-pointer group">
-                      <div className="absolute top-0 right-0 bg-blue-100 text-blue-700 text-[10px] font-black px-3 py-1 rounded-bl-xl uppercase tracking-widest">Da Equipa</div>
-                      <h4 className="font-extrabold text-slate-800 pr-16 mb-1 group-hover:text-blue-600 transition-colors">{script.titulo}</h4>
+                    <div key={script.id} onClick={() => setScriptVisualizado(script)} className="bg-gradient-to-br from-white to-slate-50 p-6 rounded-3xl border border-[#00A859]/20 flex flex-col h-full shadow-sm hover:shadow-md transition-all relative overflow-hidden cursor-pointer group">
+                      <div className="absolute top-0 right-0 bg-[#00A859]/10 text-[#008C4A] text-[10px] font-black px-3 py-1 rounded-bl-xl uppercase tracking-widest">Da Equipe</div>
+                      <h4 className="font-extrabold text-slate-800 pr-16 mb-1 group-hover:text-[#00A859] transition-colors">{script.titulo}</h4>
                       <p className="text-xs font-medium text-slate-400 mb-2 flex items-center gap-1">Criado por: <strong className="text-slate-600">{script.usuarios?.nome_completo || 'Desconhecido'}</strong></p>
                       
                       {script.anexos_scripts?.length > 0 && (
-                          <span className="text-[10px] bg-blue-50 text-blue-600 px-2 py-1 rounded w-fit mb-3 flex items-center gap-1 font-bold">
+                          <span className="text-[10px] bg-[#00A859]/5 text-[#00A859] px-2 py-1 rounded w-fit mb-3 flex items-center gap-1 font-bold">
                             <Paperclip size={10}/> {script.anexos_scripts.length} anexo(s)
                           </span>
                       )}
@@ -441,7 +618,7 @@ export default function DashboardAtendente() {
                       <div className="flex-1 mb-6 text-sm text-slate-600 line-clamp-2" dangerouslySetInnerHTML={{__html: decodificarHTML(script.conteudo)}} />
                       
                       <div className="mt-auto pt-4 border-t border-slate-200">
-                        <button onClick={(e) => copiarParaAreaTransferencia(decodificarHTML(script.conteudo), script.titulo, e)} className="w-full flex items-center justify-center gap-2 bg-blue-600 hover:bg-blue-700 text-white font-bold py-2.5 rounded-xl transition-colors shadow-md shadow-blue-200">
+                        <button onClick={(e) => copiarParaAreaTransferencia(decodificarHTML(script.conteudo), script.titulo, e)} className="w-full flex items-center justify-center gap-2 bg-gradient-to-r from-[#00A859] to-[#008C4A] hover:from-[#008C4A] hover:to-[#00A859] text-white font-bold py-2.5 rounded-xl transition-all shadow-lg shadow-[#00A859]/20 hover:shadow-xl hover:shadow-[#00A859]/30 active:scale-95">
                           <Copy size={16}/> Copiar Texto
                         </button>
                       </div>
@@ -465,7 +642,7 @@ export default function DashboardAtendente() {
                   {publicacaoVisualizada ? publicacaoVisualizada.titulo : scriptVisualizado.titulo}
                 </h2>
                 {scriptVisualizado && (
-                  <button onClick={() => copiarParaAreaTransferencia(decodificarHTML(scriptVisualizado.conteudo), scriptVisualizado.titulo)} className="flex items-center gap-2 text-sm font-bold bg-blue-100 text-blue-700 hover:bg-blue-200 px-4 py-2 rounded-xl transition-colors">
+                  <button onClick={() => copiarParaAreaTransferencia(decodificarHTML(scriptVisualizado.conteudo), scriptVisualizado.titulo)} className="flex items-center gap-2 text-sm font-bold bg-[#00A859]/10 text-[#008C4A] hover:bg-blue-200 px-4 py-2 rounded-xl transition-colors">
                     <Copy size={16}/> Copiar Texto Inteiro
                   </button>
                 )}
@@ -488,8 +665,8 @@ export default function DashboardAtendente() {
                 </h4>
                 <div className="flex flex-wrap gap-3">
                   {(publicacaoVisualizada ? publicacaoVisualizada.anexos_comunicados : scriptVisualizado.anexos_scripts).map((anexo) => (
-                    <a key={anexo.id} href={anexo.url_arquivo} target="_blank" rel="noopener noreferrer" className="group flex items-center gap-3 px-5 py-3 bg-white border border-slate-200 rounded-xl text-sm font-bold text-slate-700 hover:border-blue-400 hover:text-blue-700 transition-all shadow-sm">
-                      <div className="bg-blue-50 p-2 rounded-lg text-blue-600 group-hover:scale-110 transition-transform">
+                    <a key={anexo.id} href={anexo.url_arquivo} target="_blank" rel="noopener noreferrer" className="group flex items-center gap-3 px-5 py-3 bg-white border border-slate-200 rounded-xl text-sm font-bold text-slate-700 hover:border-[#00A859]400 hover:text-[#008C4A] transition-all shadow-sm">
+                      <div className="bg-[#00A859]/5 p-2 rounded-lg text-[#00A859] group-hover:scale-110 transition-transform">
                         <Download size={18} />
                       </div>
                       <span className="truncate max-w-[200px] md:max-w-sm">{anexo.nome_arquivo}</span>
@@ -498,6 +675,363 @@ export default function DashboardAtendente() {
                 </div>
               </div>
             )}
+
+          </div>
+        </div>
+      )}
+
+      {/* MODAL DE BOAS-VINDAS */}
+      {modalBoasVindas && (
+        <div className="fixed inset-0 z-[200] flex items-center justify-center p-4 sm:p-6 bg-gradient-to-br from-[#00A859]/80 to-[#008C4A]/80 backdrop-blur-md animate-in fade-in duration-300" onClick={(e) => e.stopPropagation()}>
+          <div className="bg-white rounded-3xl shadow-2xl w-full max-w-md overflow-hidden animate-in zoom-in-95 duration-300">
+            
+            {etapaBoasVindas === 'pergunta' ? (
+              // ETAPA 1: PERGUNTA
+              <div className="p-8">
+                <div className="text-center mb-6">
+                  <div className="mx-auto w-20 h-20 bg-gradient-to-br from-[#00A859] to-[#008C4A] rounded-full flex items-center justify-center mb-4 shadow-lg shadow-[#00A859]/20">
+                    <Users size={40} className="text-white" />
+                  </div>
+                  <h3 className="text-2xl font-extrabold text-slate-800 mb-2">Olá! 👋</h3>
+                  <p className="text-slate-600 font-medium">Vamos personalizar sua experiência</p>
+                </div>
+
+                <div className="space-y-5">
+                  <div>
+                    <label className="block text-sm font-bold text-slate-700 mb-2">
+                      Como você prefere ser chamado(a)?
+                    </label>
+                    <input
+                      type="text"
+                      value={nomePreferido}
+                      onChange={(e) => setNomePreferido(e.target.value)}
+                      placeholder="Digite seu nome ou apelido"
+                      className="w-full px-4 py-3 bg-slate-50 border-2 border-slate-200 rounded-xl focus:ring-4 focus:ring-[#00A859]/20 focus:border-[#00A859] outline-none transition-all font-medium"
+                      autoFocus
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-sm font-bold text-slate-700 mb-3">
+                      Como prefere ser tratado(a)?
+                    </label>
+                    <div className="grid grid-cols-2 gap-3">
+                      <button
+                        onClick={() => setTratamento('masculino')}
+                        className={`p-4 rounded-xl border-2 transition-all font-bold ${
+                          tratamento === 'masculino'
+                            ? 'bg-gradient-to-br from-[#00A859] to-[#008C4A] border-[#00A859] text-white shadow-lg shadow-[#00A859]/20'
+                            : 'bg-white border-slate-200 text-slate-600 hover:border-[#00A859]300 hover:bg-[#00A859]/5'
+                        }`}
+                      >
+                        <div className="text-2xl mb-1">👨</div>
+                        <div className="text-sm">Masculino</div>
+                      </button>
+                      <button
+                        onClick={() => setTratamento('feminino')}
+                        className={`p-4 rounded-xl border-2 transition-all font-bold ${
+                          tratamento === 'feminino'
+                            ? 'bg-gradient-to-br from-pink-500 to-pink-600 border-pink-600 text-white shadow-lg shadow-pink-200'
+                            : 'bg-white border-slate-200 text-slate-600 hover:border-pink-300 hover:bg-pink-50'
+                        }`}
+                      >
+                        <div className="text-2xl mb-1">👩</div>
+                        <div className="text-sm">Feminino</div>
+                      </button>
+                    </div>
+                  </div>
+                </div>
+
+                <button
+                  onClick={confirmarNome}
+                  disabled={!nomePreferido.trim() || !tratamento}
+                  className="w-full mt-6 py-4 bg-gradient-to-r from-[#00A859] to-[#008C4A] hover:from-[#008C4A] hover:to-[#00A859] text-white font-bold rounded-xl transition-all shadow-lg shadow-[#00A859]/20 hover:shadow-xl hover:shadow-[#00A859]/30 active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  Continuar
+                </button>
+              </div>
+            ) : (
+              // ETAPA 2: SAUDAÇÃO
+              <div className="relative overflow-hidden">
+                {/* Background decorativo */}
+                <div className="absolute inset-0 bg-gradient-to-br from-[#00A859] via-[#008C4A] to-[#003D5C] opacity-10"></div>
+                <div className="absolute top-0 right-0 w-64 h-64 bg-[#00A859] rounded-full blur-3xl opacity-20 -mr-32 -mt-32"></div>
+                <div className="absolute bottom-0 left-0 w-64 h-64 bg-[#008C4A] rounded-full blur-3xl opacity-20 -ml-32 -mb-32"></div>
+                
+                <div className="relative p-8 text-center">
+                  <div className="mb-6 animate-in zoom-in duration-500">
+                    <div className="text-6xl mb-4">
+                      {tratamento === 'feminino' ? '👩‍💼' : '👨‍💼'}
+                    </div>
+                    <h3 className="text-3xl font-black text-slate-800 mb-2">
+                      {obterSaudacao()}, {nomePreferido}!
+                    </h3>
+                    <p className="text-xl font-bold bg-gradient-to-r from-[#00A859] to-[#008C4A] bg-clip-text text-transparent">
+                      Seja {tratamento === 'feminino' ? 'bem-vinda' : 'bem-vindo'}! ✨
+                    </p>
+                  </div>
+
+                  <div className="bg-white/80 backdrop-blur-sm rounded-2xl p-6 mb-6 border border-slate-200 shadow-lg">
+                    <p className="text-slate-700 font-medium leading-relaxed">
+                      Estamos felizes em ter você aqui. Que seu dia seja produtivo e cheio de conquistas! 🚀
+                    </p>
+                  </div>
+
+                  <button
+                    onClick={fecharBoasVindas}
+                    className="w-full py-4 bg-gradient-to-r from-[#00A859] to-[#008C4A] hover:from-[#008C4A] hover:to-[#00A859] text-white font-bold rounded-xl transition-all shadow-lg shadow-[#00A859]/20 hover:shadow-xl hover:shadow-[#00A859]/30 active:scale-95"
+                  >
+                    Começar a trabalhar
+                  </button>
+                </div>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* MODAL DE INSTRUÇÕES DE USO */}
+      {modalInstrucoes && (
+        <div className="fixed inset-0 z-[200] flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm animate-in fade-in duration-200" onClick={() => setModalInstrucoes(false)}>
+          <div className="bg-white rounded-3xl shadow-2xl w-full max-w-4xl max-h-[90vh] flex flex-col overflow-hidden animate-in zoom-in-95 duration-200" onClick={(e) => e.stopPropagation()}>
+            
+            {/* Header */}
+            <div className="p-6 md:p-8 border-b border-slate-100 bg-gradient-to-r from-emerald-50 to-[#00A859]/5 flex justify-between items-start gap-4 shrink-0">
+              <div className="flex items-center gap-4">
+                <div className="bg-gradient-to-br from-emerald-500 to-emerald-600 p-4 rounded-2xl text-white shadow-lg shadow-emerald-200">
+                  <HelpCircle size={32} />
+                </div>
+                <div>
+                  <h2 className="text-2xl md:text-3xl font-extrabold text-slate-800 leading-tight">
+                    Instruções de Uso - Atendente
+                  </h2>
+                  <p className="text-slate-600 font-medium mt-1">
+                    Guia completo de todas as funcionalidades do painel
+                  </p>
+                </div>
+              </div>
+              <button 
+                onClick={() => setModalInstrucoes(false)}
+                className="p-2 text-slate-400 hover:text-slate-700 hover:bg-slate-200 rounded-full transition-all shrink-0"
+              >
+                <X size={24} />
+              </button>
+            </div>
+
+            {/* Conteúdo */}
+            <div className="p-6 md:p-8 overflow-y-auto">
+              <div className="space-y-8">
+                
+                {/* Seção 1: Comunicados Oficiais */}
+                <div className="bg-gradient-to-br from-[#00A859]/5 to-[#00A859]/10 p-6 rounded-2xl border border-[#00A859]/30">
+                  <div className="flex items-center gap-3 mb-4">
+                    <div className="bg-[#00A859] p-2 rounded-xl text-white">
+                      <FileText size={24} />
+                    </div>
+                    <h3 className="text-xl font-extrabold text-slate-800">1. Comunicados Oficiais</h3>
+                  </div>
+                  <ul className="space-y-3 text-slate-700">
+                    <li className="flex items-start gap-3">
+                      <span className="text-[#00A859] font-bold shrink-0">•</span>
+                      <span><strong>Visualizar:</strong> Clique em qualquer comunicado para ler o conteúdo completo</span>
+                    </li>
+                    <li className="flex items-start gap-3">
+                      <span className="text-[#00A859] font-bold shrink-0">•</span>
+                      <span><strong>Curtir:</strong> Clique no botão de coração para curtir comunicados úteis</span>
+                    </li>
+                    <li className="flex items-start gap-3">
+                      <span className="text-[#00A859] font-bold shrink-0">•</span>
+                      <span><strong>Anexos:</strong> Baixe arquivos anexados (PDFs, planilhas, imagens) clicando nos links</span>
+                    </li>
+                    <li className="flex items-start gap-3">
+                      <span className="text-[#00A859] font-bold shrink-0">•</span>
+                      <span><strong>Buscar:</strong> Use o campo de busca para encontrar comunicados por título ou tag</span>
+                    </li>
+                    <li className="flex items-start gap-3">
+                      <span className="text-[#00A859] font-bold shrink-0">•</span>
+                      <span><strong>Rastreamento:</strong> Suas leituras são registradas automaticamente para auditoria</span>
+                    </li>
+                  </ul>
+                </div>
+
+                {/* Seção 2: Meus Scripts */}
+                <div className="bg-gradient-to-br from-green-50 to-green-100 p-6 rounded-2xl border border-green-200">
+                  <div className="flex items-center gap-3 mb-4">
+                    <div className="bg-green-600 p-2 rounded-xl text-white">
+                      <MessageSquare size={24} />
+                    </div>
+                    <h3 className="text-xl font-extrabold text-slate-800">2. Meus Scripts Pessoais</h3>
+                  </div>
+                  <ul className="space-y-3 text-slate-700">
+                    <li className="flex items-start gap-3">
+                      <span className="text-green-600 font-bold shrink-0">•</span>
+                      <span><strong>Criar Script:</strong> Clique em "Criar Novo Atalho/Script" para adicionar respostas rápidas</span>
+                    </li>
+                    <li className="flex items-start gap-3">
+                      <span className="text-green-600 font-bold shrink-0">•</span>
+                      <span><strong>Título:</strong> Dê um nome descritivo (ex: "Saudação de Bom Dia", "Resposta Cancelamento")</span>
+                    </li>
+                    <li className="flex items-start gap-3">
+                      <span className="text-green-600 font-bold shrink-0">•</span>
+                      <span><strong>Conteúdo:</strong> Digite ou cole o texto que você usa frequentemente no atendimento</span>
+                    </li>
+                    <li className="flex items-start gap-3">
+                      <span className="text-green-600 font-bold shrink-0">•</span>
+                      <span><strong>Formatação:</strong> Use negrito, itálico, listas e links para organizar melhor</span>
+                    </li>
+                    <li className="flex items-start gap-3">
+                      <span className="text-green-600 font-bold shrink-0">•</span>
+                      <span><strong>Anexos:</strong> Adicione arquivos úteis (modelos, imagens, documentos)</span>
+                    </li>
+                    <li className="flex items-start gap-3">
+                      <span className="text-green-600 font-bold shrink-0">•</span>
+                      <span><strong>Privacidade:</strong> Marque "Compartilhar com a Equipe" se quiser que outros vejam</span>
+                    </li>
+                    <li className="flex items-start gap-3">
+                      <span className="text-green-600 font-bold shrink-0">•</span>
+                      <span><strong>Copiar:</strong> Clique em "Copiar" para copiar o texto e colar no atendimento</span>
+                    </li>
+                    <li className="flex items-start gap-3">
+                      <span className="text-green-600 font-bold shrink-0">•</span>
+                      <span><strong>Editar/Excluir:</strong> Use os botões laranja (editar) e vermelho (excluir) conforme necessário</span>
+                    </li>
+                  </ul>
+                </div>
+
+                {/* Seção 3: Scripts da Equipe */}
+                <div className="bg-gradient-to-br from-purple-50 to-purple-100 p-6 rounded-2xl border border-purple-200">
+                  <div className="flex items-center gap-3 mb-4">
+                    <div className="bg-purple-600 p-2 rounded-xl text-white">
+                      <Users size={24} />
+                    </div>
+                    <h3 className="text-xl font-extrabold text-slate-800">3. Scripts da Equipe</h3>
+                  </div>
+                  <ul className="space-y-3 text-slate-700">
+                    <li className="flex items-start gap-3">
+                      <span className="text-purple-600 font-bold shrink-0">•</span>
+                      <span><strong>Visualizar:</strong> Veja scripts compartilhados por outros atendentes da equipe</span>
+                    </li>
+                    <li className="flex items-start gap-3">
+                      <span className="text-purple-600 font-bold shrink-0">•</span>
+                      <span><strong>Autor:</strong> Cada script mostra quem criou para você saber a fonte</span>
+                    </li>
+                    <li className="flex items-start gap-3">
+                      <span className="text-purple-600 font-bold shrink-0">•</span>
+                      <span><strong>Copiar:</strong> Clique em "Copiar Texto" para usar o script no seu atendimento</span>
+                    </li>
+                    <li className="flex items-start gap-3">
+                      <span className="text-purple-600 font-bold shrink-0">•</span>
+                      <span><strong>Anexos:</strong> Baixe arquivos compartilhados pelos colegas</span>
+                    </li>
+                    <li className="flex items-start gap-3">
+                      <span className="text-purple-600 font-bold shrink-0">•</span>
+                      <span><strong>Buscar:</strong> Use a busca para encontrar scripts específicos rapidamente</span>
+                    </li>
+                  </ul>
+                </div>
+
+                {/* Seção 4: Notificações */}
+                <div className="bg-gradient-to-br from-orange-50 to-orange-100 p-6 rounded-2xl border border-orange-200">
+                  <div className="flex items-center gap-3 mb-4">
+                    <div className="bg-orange-600 p-2 rounded-xl text-white">
+                      <Bell size={24} />
+                    </div>
+                    <h3 className="text-xl font-extrabold text-slate-800">4. Notificações</h3>
+                  </div>
+                  <ul className="space-y-3 text-slate-700">
+                    <li className="flex items-start gap-3">
+                      <span className="text-orange-600 font-bold shrink-0">•</span>
+                      <span><strong>Sininho:</strong> Clique no ícone de sino para ver suas notificações</span>
+                    </li>
+                    <li className="flex items-start gap-3">
+                      <span className="text-orange-600 font-bold shrink-0">•</span>
+                      <span><strong>Badge Vermelho:</strong> Mostra quantas notificações não lidas você tem</span>
+                    </li>
+                    <li className="flex items-start gap-3">
+                      <span className="text-orange-600 font-bold shrink-0">•</span>
+                      <span><strong>Som:</strong> Você ouvirá um som quando chegar nova notificação</span>
+                    </li>
+                    <li className="flex items-start gap-3">
+                      <span className="text-orange-600 font-bold shrink-0">•</span>
+                      <span><strong>Ler:</strong> Clique na notificação para marcar como lida e ir direto ao comunicado</span>
+                    </li>
+                    <li className="flex items-start gap-3">
+                      <span className="text-orange-600 font-bold shrink-0">•</span>
+                      <span><strong>Atualização:</strong> As notificações são atualizadas automaticamente a cada 30 segundos</span>
+                    </li>
+                  </ul>
+                </div>
+
+                {/* Seção 5: Busca Rápida */}
+                <div className="bg-gradient-to-br from-slate-50 to-slate-100 p-6 rounded-2xl border border-slate-200">
+                  <div className="flex items-center gap-3 mb-4">
+                    <div className="bg-slate-600 p-2 rounded-xl text-white">
+                      <Search size={24} />
+                    </div>
+                    <h3 className="text-xl font-extrabold text-slate-800">5. Busca Rápida</h3>
+                  </div>
+                  <ul className="space-y-3 text-slate-700">
+                    <li className="flex items-start gap-3">
+                      <span className="text-slate-600 font-bold shrink-0">•</span>
+                      <span><strong>Campo Global:</strong> Use o campo de busca no topo para filtrar em qualquer aba</span>
+                    </li>
+                    <li className="flex items-start gap-3">
+                      <span className="text-slate-600 font-bold shrink-0">•</span>
+                      <span><strong>Filtro em Tempo Real:</strong> Os resultados aparecem conforme você digita</span>
+                    </li>
+                    <li className="flex items-start gap-3">
+                      <span className="text-slate-600 font-bold shrink-0">•</span>
+                      <span><strong>Busca Inteligente:</strong> Funciona em títulos, tags e conteúdos</span>
+                    </li>
+                  </ul>
+                </div>
+
+                {/* Dicas Importantes */}
+                <div className="bg-gradient-to-r from-yellow-50 to-amber-50 p-6 rounded-2xl border-2 border-yellow-300">
+                  <div className="flex items-center gap-3 mb-4">
+                    <span className="text-3xl">💡</span>
+                    <h3 className="text-xl font-extrabold text-slate-800">Dicas para Melhor Uso</h3>
+                  </div>
+                  <ul className="space-y-2 text-slate-700">
+                    <li className="flex items-start gap-2">
+                      <span className="text-yellow-600 font-bold">✓</span>
+                      <span>Crie scripts para respostas que você usa frequentemente - economiza tempo!</span>
+                    </li>
+                    <li className="flex items-start gap-2">
+                      <span className="text-yellow-600 font-bold">✓</span>
+                      <span>Curta os comunicados úteis para ajudar a monitoria a identificar conteúdo relevante</span>
+                    </li>
+                    <li className="flex items-start gap-2">
+                      <span className="text-yellow-600 font-bold">✓</span>
+                      <span>Compartilhe seus melhores scripts com a equipe para ajudar os colegas</span>
+                    </li>
+                    <li className="flex items-start gap-2">
+                      <span className="text-yellow-600 font-bold">✓</span>
+                      <span>Verifique as notificações regularmente para não perder comunicados importantes</span>
+                    </li>
+                    <li className="flex items-start gap-2">
+                      <span className="text-yellow-600 font-bold">✓</span>
+                      <span>Use a busca para encontrar informações rapidamente durante o atendimento</span>
+                    </li>
+                    <li className="flex items-start gap-2">
+                      <span className="text-yellow-600 font-bold">✓</span>
+                      <span>Organize seus scripts por categorias usando títulos descritivos</span>
+                    </li>
+                  </ul>
+                </div>
+
+              </div>
+            </div>
+
+            {/* Footer */}
+            <div className="p-6 border-t border-slate-100 bg-slate-50 shrink-0">
+              <button
+                onClick={() => setModalInstrucoes(false)}
+                className="w-full py-4 bg-gradient-to-r from-emerald-600 to-emerald-700 hover:from-emerald-700 hover:to-emerald-800 text-white font-bold rounded-xl transition-all shadow-lg shadow-emerald-200 hover:shadow-xl hover:shadow-emerald-300 active:scale-95"
+              >
+                Entendi, vamos começar!
+              </button>
+            </div>
 
           </div>
         </div>
@@ -533,12 +1067,302 @@ export default function DashboardAtendente() {
       )}
       
       <style>{`
-        .modal-leitura .ql-editor { padding: 0 !important; font-size: 16px !important; color: #334155; line-height: 1.6; }
-        .modal-leitura .ql-editor ul { list-style-type: disc !important; padding-left: 1.5em !important; margin-bottom: 1em !important; }
-        .modal-leitura .ql-editor ol { list-style-type: decimal !important; padding-left: 1.5em !important; margin-bottom: 1em !important; }
-        .modal-leitura .ql-editor a { color: #2563eb; text-decoration: underline; }
-        .ql-toolbar.ql-snow { border: none !important; border-bottom: 1px solid #e2e8f0 !important; background-color: #f8fafc;}
-        .ql-container.ql-snow { border: none !important; }
+        /* IMPORTAR FONTES DO GOOGLE FONTS */
+        @import url('https://fonts.googleapis.com/css2?family=Roboto:wght@400;700&family=Open+Sans:wght@400;700&family=Lato:wght@400;700&family=Montserrat:wght@400;700&family=Poppins:wght@400;700&family=Raleway:wght@400;700&family=Ubuntu:wght@400;700&display=swap');
+        
+        /* CONFIGURAR FONTES NO QUILL */
+        .ql-snow .ql-picker.ql-font .ql-picker-label[data-value="sans-serif"]::before,
+        .ql-snow .ql-picker.ql-font .ql-picker-item[data-value="sans-serif"]::before {
+          content: 'Sans Serif';
+          font-family: 'Helvetica', 'Arial', sans-serif;
+        }
+        .ql-font-sans-serif {
+          font-family: 'Helvetica', 'Arial', sans-serif;
+        }
+        
+        .ql-snow .ql-picker.ql-font .ql-picker-label[data-value="serif"]::before,
+        .ql-snow .ql-picker.ql-font .ql-picker-item[data-value="serif"]::before {
+          content: 'Serif';
+          font-family: 'Georgia', serif;
+        }
+        .ql-font-serif {
+          font-family: 'Georgia', serif;
+        }
+        
+        .ql-snow .ql-picker.ql-font .ql-picker-label[data-value="monospace"]::before,
+        .ql-snow .ql-picker.ql-font .ql-picker-item[data-value="monospace"]::before {
+          content: 'Monospace';
+          font-family: 'Monaco', 'Courier New', monospace;
+        }
+        .ql-font-monospace {
+          font-family: 'Monaco', 'Courier New', monospace;
+        }
+        
+        .ql-snow .ql-picker.ql-font .ql-picker-label[data-value="arial"]::before,
+        .ql-snow .ql-picker.ql-font .ql-picker-item[data-value="arial"]::before {
+          content: 'Arial';
+          font-family: Arial, sans-serif;
+        }
+        .ql-font-arial {
+          font-family: Arial, sans-serif;
+        }
+        
+        .ql-snow .ql-picker.ql-font .ql-picker-label[data-value="georgia"]::before,
+        .ql-snow .ql-picker.ql-font .ql-picker-item[data-value="georgia"]::before {
+          content: 'Georgia';
+          font-family: Georgia, serif;
+        }
+        .ql-font-georgia {
+          font-family: Georgia, serif;
+        }
+        
+        .ql-snow .ql-picker.ql-font .ql-picker-label[data-value="impact"]::before,
+        .ql-snow .ql-picker.ql-font .ql-picker-item[data-value="impact"]::before {
+          content: 'Impact';
+          font-family: Impact, sans-serif;
+        }
+        .ql-font-impact {
+          font-family: Impact, sans-serif;
+        }
+        
+        .ql-snow .ql-picker.ql-font .ql-picker-label[data-value="tahoma"]::before,
+        .ql-snow .ql-picker.ql-font .ql-picker-item[data-value="tahoma"]::before {
+          content: 'Tahoma';
+          font-family: Tahoma, sans-serif;
+        }
+        .ql-font-tahoma {
+          font-family: Tahoma, sans-serif;
+        }
+        
+        .ql-snow .ql-picker.ql-font .ql-picker-label[data-value="times-new-roman"]::before,
+        .ql-snow .ql-picker.ql-font .ql-picker-item[data-value="times-new-roman"]::before {
+          content: 'Times New Roman';
+          font-family: 'Times New Roman', serif;
+        }
+        .ql-font-times-new-roman {
+          font-family: 'Times New Roman', serif;
+        }
+        
+        .ql-snow .ql-picker.ql-font .ql-picker-label[data-value="verdana"]::before,
+        .ql-snow .ql-picker.ql-font .ql-picker-item[data-value="verdana"]::before {
+          content: 'Verdana';
+          font-family: Verdana, sans-serif;
+        }
+        .ql-font-verdana {
+          font-family: Verdana, sans-serif;
+        }
+        
+        .ql-snow .ql-picker.ql-font .ql-picker-label[data-value="roboto"]::before,
+        .ql-snow .ql-picker.ql-font .ql-picker-item[data-value="roboto"]::before {
+          content: 'Roboto';
+          font-family: 'Roboto', sans-serif;
+        }
+        .ql-font-roboto {
+          font-family: 'Roboto', sans-serif;
+        }
+        
+        .ql-snow .ql-picker.ql-font .ql-picker-label[data-value="open-sans"]::before,
+        .ql-snow .ql-picker.ql-font .ql-picker-item[data-value="open-sans"]::before {
+          content: 'Open Sans';
+          font-family: 'Open Sans', sans-serif;
+        }
+        .ql-font-open-sans {
+          font-family: 'Open Sans', sans-serif;
+        }
+        
+        .ql-snow .ql-picker.ql-font .ql-picker-label[data-value="lato"]::before,
+        .ql-snow .ql-picker.ql-font .ql-picker-item[data-value="lato"]::before {
+          content: 'Lato';
+          font-family: 'Lato', sans-serif;
+        }
+        .ql-font-lato {
+          font-family: 'Lato', sans-serif;
+        }
+        
+        .ql-snow .ql-picker.ql-font .ql-picker-label[data-value="montserrat"]::before,
+        .ql-snow .ql-picker.ql-font .ql-picker-item[data-value="montserrat"]::before {
+          content: 'Montserrat';
+          font-family: 'Montserrat', sans-serif;
+        }
+        .ql-font-montserrat {
+          font-family: 'Montserrat', sans-serif;
+        }
+        
+        .ql-snow .ql-picker.ql-font .ql-picker-label[data-value="poppins"]::before,
+        .ql-snow .ql-picker.ql-font .ql-picker-item[data-value="poppins"]::before {
+          content: 'Poppins';
+          font-family: 'Poppins', sans-serif;
+        }
+        .ql-font-poppins {
+          font-family: 'Poppins', sans-serif;
+        }
+        
+        .ql-snow .ql-picker.ql-font .ql-picker-label[data-value="raleway"]::before,
+        .ql-snow .ql-picker.ql-font .ql-picker-item[data-value="raleway"]::before {
+          content: 'Raleway';
+          font-family: 'Raleway', sans-serif;
+        }
+        .ql-font-raleway {
+          font-family: 'Raleway', sans-serif;
+        }
+        
+        .ql-snow .ql-picker.ql-font .ql-picker-label[data-value="ubuntu"]::before,
+        .ql-snow .ql-picker.ql-font .ql-picker-item[data-value="ubuntu"]::before {
+          content: 'Ubuntu';
+          font-family: 'Ubuntu', sans-serif;
+        }
+        .ql-font-ubuntu {
+          font-family: 'Ubuntu', sans-serif;
+        }
+        
+        /* Estilos para leitura de conteúdo formatado */
+        .modal-leitura .ql-editor { 
+          padding: 0 !important; 
+          font-size: 16px !important; 
+          color: #334155; 
+          line-height: 1.8;
+          font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+        }
+        
+        /* Parágrafos */
+        .modal-leitura .ql-editor p { 
+          margin-bottom: 1em !important; 
+          white-space: pre-wrap;
+        }
+        
+        /* Quebras de linha */
+        .modal-leitura .ql-editor br {
+          display: block;
+          content: "";
+          margin-top: 0.5em;
+        }
+        
+        /* Listas */
+        .modal-leitura .ql-editor ul { 
+          list-style-type: disc !important; 
+          padding-left: 2em !important; 
+          margin-bottom: 1em !important;
+          margin-top: 0.5em !important;
+        }
+        .modal-leitura .ql-editor ol { 
+          list-style-type: decimal !important; 
+          padding-left: 2em !important; 
+          margin-bottom: 1em !important;
+          margin-top: 0.5em !important;
+        }
+        .modal-leitura .ql-editor li {
+          margin-bottom: 0.5em !important;
+          padding-left: 0.5em !important;
+        }
+        
+        /* Formatação de texto */
+        .modal-leitura .ql-editor strong { 
+          font-weight: 700 !important; 
+        }
+        .modal-leitura .ql-editor em { 
+          font-style: italic !important; 
+        }
+        .modal-leitura .ql-editor u { 
+          text-decoration: underline !important; 
+        }
+        .modal-leitura .ql-editor s { 
+          text-decoration: line-through !important; 
+        }
+        
+        /* Links */
+        .modal-leitura .ql-editor a { 
+          color: #2563eb; 
+          text-decoration: underline;
+          cursor: pointer;
+        }
+        .modal-leitura .ql-editor a:hover { 
+          color: #1d4ed8; 
+        }
+        
+        /* Cabeçalhos */
+        .modal-leitura .ql-editor h1 { 
+          font-size: 2em !important; 
+          font-weight: 700 !important; 
+          margin-top: 1em !important; 
+          margin-bottom: 0.5em !important; 
+        }
+        .modal-leitura .ql-editor h2 { 
+          font-size: 1.5em !important; 
+          font-weight: 700 !important; 
+          margin-top: 1em !important; 
+          margin-bottom: 0.5em !important; 
+        }
+        .modal-leitura .ql-editor h3 { 
+          font-size: 1.25em !important; 
+          font-weight: 600 !important; 
+          margin-top: 0.8em !important; 
+          margin-bottom: 0.5em !important; 
+        }
+        
+        /* Imagens */
+        .modal-leitura .ql-editor img {
+          max-width: 100%;
+          height: auto;
+          border-radius: 8px;
+          margin: 1.5em auto;
+          display: block;
+          box-shadow: 0 4px 6px -1px rgb(0 0 0 / 0.1);
+        }
+        
+        /* Citações */
+        .modal-leitura .ql-editor blockquote {
+          border-left: 4px solid #e2e8f0;
+          padding-left: 1em;
+          margin-left: 0;
+          margin-right: 0;
+          margin-top: 1em;
+          margin-bottom: 1em;
+          color: #64748b;
+          font-style: italic;
+        }
+        
+        /* Código */
+        .modal-leitura .ql-editor code {
+          background-color: #f1f5f9;
+          padding: 0.2em 0.4em;
+          border-radius: 3px;
+          font-family: 'Courier New', monospace;
+          font-size: 0.9em;
+        }
+        .modal-leitura .ql-editor pre {
+          background-color: #1e293b;
+          color: #e2e8f0;
+          padding: 1em;
+          border-radius: 8px;
+          overflow-x: auto;
+          margin: 1em 0;
+        }
+        .modal-leitura .ql-editor pre code {
+          background-color: transparent;
+          padding: 0;
+          color: inherit;
+        }
+        
+        /* Alinhamento */
+        .modal-leitura .ql-editor .ql-align-center {
+          text-align: center;
+        }
+        .modal-leitura .ql-editor .ql-align-right {
+          text-align: right;
+        }
+        .modal-leitura .ql-editor .ql-align-justify {
+          text-align: justify;
+        }
+        
+        /* Estilos do editor */
+        .ql-toolbar.ql-snow { 
+          border: none !important; 
+          border-bottom: 1px solid #e2e8f0 !important; 
+          background-color: #f8fafc;
+        }
+        .ql-container.ql-snow { 
+          border: none !important; 
+        }
       `}</style>
     </div>
   );

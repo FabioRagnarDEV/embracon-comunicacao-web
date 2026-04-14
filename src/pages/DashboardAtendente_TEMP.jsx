@@ -1,4 +1,4 @@
-﻿import { useState, useEffect, useCallback, useRef } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import ReactQuill from 'react-quill-new';
 import { 
   Plus, Search, Edit2, Trash2, X, Save, 
@@ -8,7 +8,7 @@ import {
 
 import 'react-quill-new/dist/quill.snow.css';
 import { comunicadosService, relatoriosService } from '../services/api';
-import backgroundImage from '../assets/telainiciaMonitoria .png';
+import backgroundImage from '../assets/telainiciaMonitoria (2).png';
 
 // Registrar fontes personalizadas no Quill
 const Font = ReactQuill.Quill.import('formats/font');
@@ -640,7 +640,7 @@ export default function DashboardMonitoria() {
               >
                 <HelpCircle size={18} /> Instruções de Uso
               </button>
-              <span className="hidden md:inline-block bg-[#00A859]/5 text-[#008C4A] text-xs font-bold px-3 py-1 rounded-full border border-[#00A859]/20">
+              <span className="hidden md:inline-block bg-blue-50 text-blue-700 text-xs font-bold px-3 py-1 rounded-full border border-blue-100">
                 PAINEL ADMINISTRATIVO
               </span>
               <button onClick={() => setModalLogoutAberto(true)} className="flex items-center gap-2 px-4 py-2 bg-gradient-to-r from-red-500 to-red-600 hover:from-red-600 hover:to-red-700 text-white text-sm font-bold rounded-xl transition-all shadow-lg shadow-red-200 hover:shadow-xl hover:shadow-red-300 active:scale-95">
@@ -648,10 +648,10 @@ export default function DashboardMonitoria() {
               </button>
             </div>
             <div className="flex gap-2 p-1 bg-white/80 backdrop-blur-sm rounded-2xl w-fit shadow-lg border border-slate-200">
-              <button onClick={() => setAbaAtiva('comunicados')} className={`flex items-center gap-2 px-6 py-2.5 rounded-xl font-bold text-sm transition-all whitespace-nowrap ${abaAtiva === 'comunicados' ? 'bg-gradient-to-r from-[#00A859] to-[#008C4A] text-white shadow-lg shadow-[#00A859]/20' : 'text-slate-600 hover:bg-slate-50 hover:text-slate-900'}`}>
+              <button onClick={() => setAbaAtiva('comunicados')} className={`flex items-center gap-2 px-6 py-2.5 rounded-xl font-bold text-sm transition-all whitespace-nowrap ${abaAtiva === 'comunicados' ? 'bg-gradient-to-r from-blue-600 to-blue-700 text-white shadow-lg shadow-blue-200' : 'text-slate-600 hover:bg-slate-50 hover:text-slate-900'}`}>
                 <FileText size={16}/> Comunicados
               </button>
-              <button onClick={() => setAbaAtiva('relatorios')} className={`flex items-center gap-2 px-6 py-2.5 rounded-xl font-bold text-sm transition-all whitespace-nowrap ${abaAtiva === 'relatorios' ? 'bg-gradient-to-r from-[#00A859] to-[#008C4A] text-white shadow-lg shadow-[#00A859]/20' : 'text-slate-600 hover:bg-slate-50 hover:text-slate-900'}`}>
+              <button onClick={() => setAbaAtiva('relatorios')} className={`flex items-center gap-2 px-6 py-2.5 rounded-xl font-bold text-sm transition-all whitespace-nowrap ${abaAtiva === 'relatorios' ? 'bg-gradient-to-r from-blue-600 to-blue-700 text-white shadow-lg shadow-blue-200' : 'text-slate-600 hover:bg-slate-50 hover:text-slate-900'}`}>
                 <BarChart3 size={16}/> Relatórios
               </button>
             </div>
@@ -663,7 +663,7 @@ export default function DashboardMonitoria() {
             {/* FORMULÁRIO DE PUBLICAÇÃO */}
             <section className={`bg-white rounded-3xl shadow-xl shadow-slate-200/50 overflow-hidden border border-slate-100 transition-all duration-500 ${idEmEdicao ? 'ring-2 ring-orange-400' : ''}`}>
               <div className="p-1 border-b border-slate-50 bg-slate-50/50">
-                <div className={`px-6 py-3 flex items-center gap-2 font-bold text-sm ${idEmEdicao ? 'text-orange-600' : 'text-[#00A859]'}`}>
+                <div className={`px-6 py-3 flex items-center gap-2 font-bold text-sm ${idEmEdicao ? 'text-orange-600' : 'text-blue-600'}`}>
                   {idEmEdicao ? <Edit2 size={16}/> : <Plus size={16}/>}
                   {idEmEdicao ? 'MODO DE EDIÇÃO' : 'NOVA PUBLICAÇÃO'}
                 </div>
@@ -690,13 +690,13 @@ export default function DashboardMonitoria() {
                       onChange={(e) => setTitulo(e.target.value)} 
                       placeholder="Ex: Atualização de Procedimento de Troca"
                       required
-                      className="w-full px-4 py-3 bg-slate-50 border-transparent rounded-2xl focus:bg-white focus:ring-4 focus:ring-[#00A859]/10 focus:border-[#00A859] transition-all outline-none border" 
+                      className="w-full px-4 py-3 bg-slate-50 border-transparent rounded-2xl focus:bg-white focus:ring-4 focus:ring-blue-500/10 focus:border-blue-500 transition-all outline-none border" 
                     />
                   </div>
 
                   <div className="space-y-1">
                     <label className="text-xs font-bold text-slate-500 uppercase tracking-wider ml-1">Conteúdo</label>
-                    <div className="form-editor rounded-2xl border border-slate-200 overflow-hidden focus-within:ring-4 focus-within:ring-[#00A859]/10 transition-all bg-white shadow-sm">
+                    <div className="form-editor rounded-2xl border border-slate-200 overflow-hidden focus-within:ring-4 focus-within:ring-blue-500/10 transition-all bg-white shadow-sm">
                       <ReactQuill 
                         theme="snow" 
                         value={conteudo} 
@@ -716,7 +716,7 @@ export default function DashboardMonitoria() {
                         value={tags} 
                         onChange={(e) => setTags(e.target.value)} 
                         placeholder="processos, logistica, sac"
-                        className="w-full px-4 py-3 bg-slate-50 border-transparent rounded-2xl focus:bg-white focus:ring-4 focus:ring-[#00A859]/10 focus:border-[#00A859] transition-all outline-none border text-sm" 
+                        className="w-full px-4 py-3 bg-slate-50 border-transparent rounded-2xl focus:bg-white focus:ring-4 focus:ring-blue-500/10 focus:border-blue-500 transition-all outline-none border text-sm" 
                       />
                     </div>
 
@@ -740,7 +740,7 @@ export default function DashboardMonitoria() {
                     type="submit" 
                     disabled={carregando}
                     className={`flex-1 flex items-center justify-center gap-2 text-white font-bold py-4 px-6 rounded-2xl transition-all shadow-lg hover:shadow-xl active:scale-[0.98] disabled:opacity-70 ${
-                      idEmEdicao ? 'bg-gradient-to-r from-orange-500 to-orange-600 hover:from-orange-600 hover:to-orange-700 shadow-orange-200 hover:shadow-orange-300' : 'bg-gradient-to-r from-[#00A859] to-[#008C4A] hover:from-[#008C4A] hover:to-[#00A859] shadow-[#00A859]/20 hover:shadow-[#00A859]/30'
+                      idEmEdicao ? 'bg-gradient-to-r from-orange-500 to-orange-600 hover:from-orange-600 hover:to-orange-700 shadow-orange-200 hover:shadow-orange-300' : 'bg-gradient-to-r from-blue-600 to-blue-700 hover:from-blue-700 hover:to-blue-800 shadow-blue-200 hover:shadow-blue-300'
                     }`}
                   >
                     {carregando ? (
@@ -775,13 +775,13 @@ export default function DashboardMonitoria() {
                 </div>
                 
                 <div className="relative w-full md:w-80 group">
-                  <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400 group-focus-within:text-[#00A859] transition-colors" size={18} />
+                  <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400 group-focus-within:text-blue-500 transition-colors" size={18} />
                   <input 
                     type="text" 
                     placeholder="Pesquisar por título ou tag..." 
                     value={termoBusca}
                     onChange={(e) => setTermoBusca(e.target.value)}
-                    className="w-full pl-12 pr-4 py-3 bg-white border border-slate-200 rounded-2xl focus:ring-4 focus:ring-[#00A859]/10 focus:border-[#00A859] outline-none transition-all shadow-sm"
+                    className="w-full pl-12 pr-4 py-3 bg-white border border-slate-200 rounded-2xl focus:ring-4 focus:ring-blue-500/10 focus:border-blue-500 outline-none transition-all shadow-sm"
                   />
                 </div>
               </div>
@@ -808,7 +808,7 @@ export default function DashboardMonitoria() {
                             <span className="text-[10px] font-black text-slate-500 uppercase tracking-widest bg-slate-100 px-3 py-1.5 rounded-lg flex items-center gap-1">
                               <Calendar size={12}/> {new Date(comunicado.criado_em).toLocaleDateString('pt-BR')}
                             </span>
-                            <span className="text-xs text-[#00A859] font-bold flex items-center gap-1.5 bg-[#00A859]/5 px-3 py-1.5 rounded-lg">
+                            <span className="text-xs text-blue-600 font-bold flex items-center gap-1.5 bg-blue-50 px-3 py-1.5 rounded-lg">
                               <Tag size={12}/> {comunicado.tags}
                             </span>
                             
@@ -827,7 +827,7 @@ export default function DashboardMonitoria() {
 
                           <button 
                             onClick={() => setPublicacaoVisualizada(comunicado)}
-                            className="inline-flex items-center gap-2 text-sm font-bold text-white transition-all bg-gradient-to-r from-[#00A859] to-[#008C4A] hover:from-[#008C4A] hover:to-[#00A859] px-5 py-2.5 rounded-xl shadow-lg shadow-[#00A859]/20 hover:shadow-xl hover:shadow-[#00A859]/30 active:scale-95"
+                            className="inline-flex items-center gap-2 text-sm font-bold text-white transition-all bg-gradient-to-r from-blue-600 to-blue-700 hover:from-blue-700 hover:to-blue-800 px-5 py-2.5 rounded-xl shadow-lg shadow-blue-200 hover:shadow-xl hover:shadow-blue-300 active:scale-95"
                           >
                             <FileText size={16}/> Ver publicação e Interações
                           </button>
@@ -864,7 +864,7 @@ export default function DashboardMonitoria() {
             <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 bg-white p-6 rounded-3xl shadow-sm border border-slate-100">
               <div>
                 <h2 className="text-2xl font-extrabold text-slate-800 flex items-center gap-3">
-                  <div className="bg-gradient-to-br from-[#00A859] to-[#008C4A] p-3 rounded-2xl text-white shadow-lg shadow-[#00A859]/20">
+                  <div className="bg-gradient-to-br from-blue-600 to-blue-700 p-3 rounded-2xl text-white shadow-lg shadow-blue-200">
                     <BarChart3 size={24} />
                   </div>
                   Relatórios e Análises
@@ -882,7 +882,7 @@ export default function DashboardMonitoria() {
 
             {/* CARDS DE MÉTRICAS RESUMIDAS */}
             <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-              <div className="bg-gradient-to-br from-[#00A859] to-[#008C4A] p-6 rounded-3xl shadow-xl text-white relative overflow-hidden">
+              <div className="bg-gradient-to-br from-blue-500 to-blue-600 p-6 rounded-3xl shadow-xl text-white relative overflow-hidden">
                 <div className="absolute top-0 right-0 w-32 h-32 bg-white/10 rounded-full -mr-16 -mt-16"></div>
                 <div className="relative">
                   <div className="flex items-center justify-between mb-3">
@@ -963,7 +963,7 @@ export default function DashboardMonitoria() {
                           </div>
                           
                           <div className="flex-1 min-w-0">
-                            <h4 className="font-extrabold text-base text-slate-800 mb-1 truncate pr-4 group-hover:text-[#00A859] transition-colors">
+                            <h4 className="font-extrabold text-base text-slate-800 mb-1 truncate pr-4 group-hover:text-blue-600 transition-colors">
                               {item.titulo}
                             </h4>
                             <div className="flex items-center gap-2 text-xs">
@@ -986,7 +986,7 @@ export default function DashboardMonitoria() {
                           <div 
                             className={`absolute top-0 left-0 h-full rounded-full transition-all duration-1000 ${
                               index === 0 ? 'bg-gradient-to-r from-orange-400 to-red-500' : 
-                              index === 1 ? 'bg-gradient-to-r from-[#00A859] to-[#008C4A]' : 
+                              index === 1 ? 'bg-gradient-to-r from-blue-400 to-blue-600' : 
                               index === 2 ? 'bg-gradient-to-r from-emerald-400 to-emerald-600' : 
                               'bg-gradient-to-r from-slate-400 to-slate-600'
                             }`}
@@ -1007,7 +1007,7 @@ export default function DashboardMonitoria() {
             <div className="bg-white p-6 md:p-8 rounded-3xl shadow-xl border border-slate-100">
               <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 mb-6">
                 <div className="flex items-center gap-3">
-                  <div className="bg-gradient-to-br from-[#00A859] to-[#008C4A] p-3 rounded-2xl text-white shadow-lg shadow-[#00A859]/20">
+                  <div className="bg-gradient-to-br from-blue-600 to-blue-700 p-3 rounded-2xl text-white shadow-lg shadow-blue-200">
                     <Users size={24} />
                   </div>
                   <div>
@@ -1016,13 +1016,13 @@ export default function DashboardMonitoria() {
                   </div>
                 </div>
                 <div className="relative w-full md:w-80 group">
-                  <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400 group-focus-within:text-[#00A859] transition-colors" size={18} />
+                  <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400 group-focus-within:text-blue-500 transition-colors" size={18} />
                   <input 
                     type="text" 
                     placeholder="Buscar por atendente ou comunicado..." 
                     value={buscaRelatorio} 
                     onChange={(e) => setBuscaRelatorio(e.target.value)} 
-                    className="w-full pl-12 pr-4 py-3 bg-slate-50 border border-slate-200 rounded-xl focus:ring-4 focus:ring-[#00A859]/10 focus:border-[#00A859] outline-none text-sm font-medium transition-all"
+                    className="w-full pl-12 pr-4 py-3 bg-slate-50 border border-slate-200 rounded-xl focus:ring-4 focus:ring-blue-500/10 focus:border-blue-500 outline-none text-sm font-medium transition-all"
                   />
                 </div>
               </div>
@@ -1065,14 +1065,14 @@ export default function DashboardMonitoria() {
                       </tr>
                     ) : (
                       historicoFiltrado.map((log) => (
-                        <tr key={log.id} className="hover:bg-[#00A859]/5/50 transition-colors group">
+                        <tr key={log.id} className="hover:bg-blue-50/50 transition-colors group">
                           <td className="px-6 py-4">
                             <div className="flex items-center gap-3">
-                              <div className="w-10 h-10 rounded-full bg-gradient-to-br from-[#00A859] to-[#008C4A] flex items-center justify-center text-white font-black shadow-md shadow-[#00A859]/20">
+                              <div className="w-10 h-10 rounded-full bg-gradient-to-br from-blue-500 to-blue-600 flex items-center justify-center text-white font-black shadow-md shadow-blue-200">
                                 {(log.usuarios?.nome_completo || 'U')[0].toUpperCase()}
                               </div>
                               <div>
-                                <div className="font-bold text-slate-800 group-hover:text-[#00A859] transition-colors">
+                                <div className="font-bold text-slate-800 group-hover:text-blue-600 transition-colors">
                                   {log.usuarios?.nome_completo || 'Usuário Desconhecido'}
                                 </div>
                                 <div className="text-[10px] text-slate-400 uppercase font-bold tracking-wider bg-slate-100 px-2 py-0.5 rounded w-fit">
@@ -1082,14 +1082,14 @@ export default function DashboardMonitoria() {
                             </div>
                           </td>
                           <td className="px-6 py-4">
-                            <div className="font-bold text-slate-700 truncate max-w-xs group-hover:text-[#00A859] transition-colors" title={log.comunicados_oficiais?.titulo}>
+                            <div className="font-bold text-slate-700 truncate max-w-xs group-hover:text-blue-600 transition-colors" title={log.comunicados_oficiais?.titulo}>
                               {log.comunicados_oficiais?.titulo || 'Comunicado Apagado'}
                             </div>
                           </td>
                           <td className="px-6 py-4">
                             <div className="flex items-center gap-2 text-slate-600 font-medium">
-                              <div className="bg-slate-100 p-2 rounded-lg group-hover:bg-[#00A859]/10 transition-colors">
-                                <Clock size={14} className="text-slate-500 group-hover:text-[#00A859] transition-colors"/>
+                              <div className="bg-slate-100 p-2 rounded-lg group-hover:bg-blue-100 transition-colors">
+                                <Clock size={14} className="text-slate-500 group-hover:text-blue-600 transition-colors"/>
                               </div>
                               <div>
                                 <div className="font-bold text-slate-700">
@@ -1142,7 +1142,7 @@ export default function DashboardMonitoria() {
                     <Calendar size={14}/> Publicado em {new Date(publicacaoVisualizada.criado_em).toLocaleDateString('pt-BR')}
                   </span>
                   <span className="w-1.5 h-1.5 rounded-full bg-slate-300"></span>
-                  <span className="text-xs font-bold text-[#00A859] flex items-center gap-1.5">
+                  <span className="text-xs font-bold text-blue-600 flex items-center gap-1.5">
                     <Tag size={14}/> {publicacaoVisualizada.tags}
                   </span>
                 </div>
@@ -1193,9 +1193,9 @@ export default function DashboardMonitoria() {
                       href={anexo.url_arquivo} 
                       target="_blank" 
                       rel="noopener noreferrer"
-                      className="group flex items-center gap-3 px-5 py-3 bg-white border border-slate-200 rounded-xl text-sm font-bold text-slate-700 hover:border-[#00A859]400 hover:text-[#008C4A] transition-all shadow-sm hover:shadow-md"
+                      className="group flex items-center gap-3 px-5 py-3 bg-white border border-slate-200 rounded-xl text-sm font-bold text-slate-700 hover:border-blue-400 hover:text-blue-700 transition-all shadow-sm hover:shadow-md"
                     >
-                      <div className="bg-[#00A859]/5 p-2 rounded-lg text-[#00A859] group-hover:scale-110 transition-transform">
+                      <div className="bg-blue-50 p-2 rounded-lg text-blue-600 group-hover:scale-110 transition-transform">
                         <FileText size={18} />
                       </div>
                       <span className="truncate max-w-[200px] md:max-w-sm">{anexo.nome_arquivo}</span>
@@ -1211,14 +1211,14 @@ export default function DashboardMonitoria() {
 
       {/* MODAL DE BOAS-VINDAS */}
       {modalBoasVindas && (
-        <div className="fixed inset-0 z-[200] flex items-center justify-center p-4 sm:p-6 bg-gradient-to-br from-[#00A859]/80 to-[#008C4A]/80 backdrop-blur-md animate-in fade-in duration-300">
+        <div className="fixed inset-0 z-[200] flex items-center justify-center p-4 sm:p-6 bg-gradient-to-br from-blue-900/80 to-purple-900/80 backdrop-blur-md animate-in fade-in duration-300">
           <div className="bg-white rounded-3xl shadow-2xl w-full max-w-md overflow-hidden animate-in zoom-in-95 duration-300">
             
             {etapaBoasVindas === 'pergunta' ? (
               // ETAPA 1: PERGUNTA
               <div className="p-8">
                 <div className="text-center mb-6">
-                  <div className="mx-auto w-20 h-20 bg-gradient-to-br from-[#00A859] to-[#008C4A] rounded-full flex items-center justify-center mb-4 shadow-lg shadow-[#00A859]/20">
+                  <div className="mx-auto w-20 h-20 bg-gradient-to-br from-blue-500 to-purple-600 rounded-full flex items-center justify-center mb-4 shadow-lg shadow-blue-200">
                     <Users size={40} className="text-white" />
                   </div>
                   <h3 className="text-2xl font-extrabold text-slate-800 mb-2">Olá! 👋</h3>
@@ -1235,7 +1235,7 @@ export default function DashboardMonitoria() {
                       value={nomePreferido}
                       onChange={(e) => setNomePreferido(e.target.value)}
                       placeholder="Digite seu nome ou apelido"
-                      className="w-full px-4 py-3 bg-slate-50 border-2 border-slate-200 rounded-xl focus:ring-4 focus:ring-[#00A859]/20 focus:border-[#00A859] outline-none transition-all font-medium"
+                      className="w-full px-4 py-3 bg-slate-50 border-2 border-slate-200 rounded-xl focus:ring-4 focus:ring-blue-500/20 focus:border-blue-500 outline-none transition-all font-medium"
                       autoFocus
                     />
                   </div>
@@ -1249,8 +1249,8 @@ export default function DashboardMonitoria() {
                         onClick={() => setTratamento('masculino')}
                         className={`p-4 rounded-xl border-2 transition-all font-bold ${
                           tratamento === 'masculino'
-                            ? 'bg-gradient-to-br from-[#00A859] to-[#008C4A] border-[#00A859] text-white shadow-lg shadow-[#00A859]/20'
-                            : 'bg-white border-slate-200 text-slate-600 hover:border-[#00A859]300 hover:bg-[#00A859]/5'
+                            ? 'bg-gradient-to-br from-blue-500 to-blue-600 border-blue-600 text-white shadow-lg shadow-blue-200'
+                            : 'bg-white border-slate-200 text-slate-600 hover:border-blue-300 hover:bg-blue-50'
                         }`}
                       >
                         <div className="text-2xl mb-1">👨</div>
@@ -1274,7 +1274,7 @@ export default function DashboardMonitoria() {
                 <button
                   onClick={confirmarNome}
                   disabled={!nomePreferido.trim() || !tratamento}
-                  className="w-full mt-6 py-4 bg-gradient-to-r from-[#00A859] to-[#008C4A] hover:from-[#008C4A] hover:to-[#00A859] text-white font-bold rounded-xl transition-all shadow-lg shadow-[#00A859]/20 hover:shadow-xl hover:shadow-[#00A859]/30 active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed"
+                  className="w-full mt-6 py-4 bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-700 hover:to-purple-700 text-white font-bold rounded-xl transition-all shadow-lg shadow-blue-200 hover:shadow-xl hover:shadow-blue-300 active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed"
                 >
                   Continuar
                 </button>
@@ -1283,9 +1283,9 @@ export default function DashboardMonitoria() {
               // ETAPA 2: SAUDAÇÃO
               <div className="relative overflow-hidden">
                 {/* Background decorativo */}
-                <div className="absolute inset-0 bg-gradient-to-br from-[#00A859] via-[#008C4A] to-[#003D5C] opacity-10"></div>
-                <div className="absolute top-0 right-0 w-64 h-64 bg-[#00A859] rounded-full blur-3xl opacity-20 -mr-32 -mt-32"></div>
-                <div className="absolute bottom-0 left-0 w-64 h-64 bg-[#008C4A] rounded-full blur-3xl opacity-20 -ml-32 -mb-32"></div>
+                <div className="absolute inset-0 bg-gradient-to-br from-blue-500 via-purple-500 to-pink-500 opacity-10"></div>
+                <div className="absolute top-0 right-0 w-64 h-64 bg-blue-400 rounded-full blur-3xl opacity-20 -mr-32 -mt-32"></div>
+                <div className="absolute bottom-0 left-0 w-64 h-64 bg-purple-400 rounded-full blur-3xl opacity-20 -ml-32 -mb-32"></div>
                 
                 <div className="relative p-8 text-center">
                   <div className="mb-6 animate-in zoom-in duration-500">
@@ -1295,7 +1295,7 @@ export default function DashboardMonitoria() {
                     <h3 className="text-3xl font-black text-slate-800 mb-2">
                       {obterSaudacao()}, {nomePreferido}!
                     </h3>
-                    <p className="text-xl font-bold bg-gradient-to-r from-[#00A859] to-[#008C4A] bg-clip-text text-transparent">
+                    <p className="text-xl font-bold bg-gradient-to-r from-blue-600 to-purple-600 bg-clip-text text-transparent">
                       Seja {tratamento === 'feminino' ? 'bem-vinda' : 'bem-vindo'}! ✨
                     </p>
                   </div>
@@ -1308,7 +1308,7 @@ export default function DashboardMonitoria() {
 
                   <button
                     onClick={fecharBoasVindas}
-                    className="w-full py-4 bg-gradient-to-r from-[#00A859] to-[#008C4A] hover:from-[#008C4A] hover:to-[#00A859] text-white font-bold rounded-xl transition-all shadow-lg shadow-[#00A859]/20 hover:shadow-xl hover:shadow-[#00A859]/30 active:scale-95"
+                    className="w-full py-4 bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-700 hover:to-purple-700 text-white font-bold rounded-xl transition-all shadow-lg shadow-blue-200 hover:shadow-xl hover:shadow-blue-300 active:scale-95"
                   >
                     Começar a trabalhar
                   </button>
@@ -1325,7 +1325,7 @@ export default function DashboardMonitoria() {
           <div className="bg-white rounded-3xl shadow-2xl w-full max-w-4xl max-h-[90vh] flex flex-col overflow-hidden animate-in zoom-in-95 duration-200" onClick={(e) => e.stopPropagation()}>
             
             {/* Header */}
-            <div className="p-6 md:p-8 border-b border-slate-100 bg-gradient-to-r from-emerald-50 to-[#00A859]/5 flex justify-between items-start gap-4 shrink-0">
+            <div className="p-6 md:p-8 border-b border-slate-100 bg-gradient-to-r from-emerald-50 to-blue-50 flex justify-between items-start gap-4 shrink-0">
               <div className="flex items-center gap-4">
                 <div className="bg-gradient-to-br from-emerald-500 to-emerald-600 p-4 rounded-2xl text-white shadow-lg shadow-emerald-200">
                   <HelpCircle size={32} />
@@ -1352,32 +1352,32 @@ export default function DashboardMonitoria() {
               <div className="space-y-8">
                 
                 {/* Seção 1: Criar Comunicados */}
-                <div className="bg-gradient-to-br from-[#00A859]/5 to-[#00A859]/10 p-6 rounded-2xl border border-[#00A859]/30">
+                <div className="bg-gradient-to-br from-blue-50 to-blue-100 p-6 rounded-2xl border border-blue-200">
                   <div className="flex items-center gap-3 mb-4">
-                    <div className="bg-[#00A859] p-2 rounded-xl text-white">
+                    <div className="bg-blue-600 p-2 rounded-xl text-white">
                       <Plus size={24} />
                     </div>
                     <h3 className="text-xl font-extrabold text-slate-800">1. Criar e Publicar Comunicados</h3>
                   </div>
                   <ul className="space-y-3 text-slate-700">
                     <li className="flex items-start gap-3">
-                      <span className="text-[#00A859] font-bold shrink-0">•</span>
+                      <span className="text-blue-600 font-bold shrink-0">•</span>
                       <span><strong>Título:</strong> Digite um título claro e objetivo para o comunicado</span>
                     </li>
                     <li className="flex items-start gap-3">
-                      <span className="text-[#00A859] font-bold shrink-0">•</span>
+                      <span className="text-blue-600 font-bold shrink-0">•</span>
                       <span><strong>Conteúdo:</strong> Use o editor de texto rico com 16 fontes disponíveis, formatação (negrito, itálico, sublinhado), listas, links e imagens</span>
                     </li>
                     <li className="flex items-start gap-3">
-                      <span className="text-[#00A859] font-bold shrink-0">•</span>
+                      <span className="text-blue-600 font-bold shrink-0">•</span>
                       <span><strong>Tags:</strong> Adicione palavras-chave separadas por vírgula para facilitar a busca (ex: processos, logística, sac)</span>
                     </li>
                     <li className="flex items-start gap-3">
-                      <span className="text-[#00A859] font-bold shrink-0">•</span>
+                      <span className="text-blue-600 font-bold shrink-0">•</span>
                       <span><strong>Anexos:</strong> Faça upload de arquivos (até 50MB) como PDFs, planilhas, imagens, etc.</span>
                     </li>
                     <li className="flex items-start gap-3">
-                      <span className="text-[#00A859] font-bold shrink-0">•</span>
+                      <span className="text-blue-600 font-bold shrink-0">•</span>
                       <span><strong>Publicar:</strong> Clique em "Publicar Agora" e o comunicado ficará visível para todos os atendentes imediatamente</span>
                     </li>
                   </ul>
