@@ -494,9 +494,18 @@ export default function DashboardAtendente() {
                         
                         <div>
                           <h3 className="font-extrabold text-lg text-slate-800 mb-2 group-hover:text-[#00A859] transition-colors">{comunicado.titulo}</h3>
-                          <div className="flex items-center gap-3 text-xs font-bold text-slate-500">
+                          <div className="flex flex-wrap items-center gap-3 text-xs font-bold text-slate-500">
                             <span className="flex items-center gap-1"><Calendar size={14}/> {new Date(comunicado.criado_em).toLocaleDateString()}</span>
                             <span className="text-[#00A859] flex items-center gap-1 bg-[#00A859]/5 px-2 py-0.5 rounded"><Tag size={12}/> {comunicado.tags}</span>
+                            {comunicado.modificado_por_usuario ? (
+                              <span className="flex items-center gap-1 text-amber-600 bg-amber-50 px-2 py-0.5 rounded">
+                                ✏️ Modificado por: {comunicado.modificado_por_usuario.email?.split('@')[0]}
+                              </span>
+                            ) : comunicado.autor ? (
+                              <span className="flex items-center gap-1 text-slate-500 bg-slate-100 px-2 py-0.5 rounded">
+                                👤 Por: {comunicado.autor.email?.split('@')[0]}
+                              </span>
+                            ) : null}
                             {comunicado.anexos_comunicados?.length > 0 && (
                                <span className="text-emerald-600 flex items-center gap-1 bg-emerald-50 px-2 py-0.5 rounded"><Paperclip size={12}/> {comunicado.anexos_comunicados.length}</span>
                             )}
@@ -641,6 +650,22 @@ export default function DashboardAtendente() {
                 <h2 className="text-2xl md:text-3xl font-extrabold text-slate-800 leading-tight mb-3">
                   {publicacaoVisualizada ? publicacaoVisualizada.titulo : scriptVisualizado.titulo}
                 </h2>
+                {publicacaoVisualizada && (
+                  <div className="flex flex-wrap items-center gap-3 mb-2">
+                    <span className="text-xs font-bold text-slate-500 flex items-center gap-1.5">
+                      <Calendar size={13}/> {new Date(publicacaoVisualizada.criado_em).toLocaleDateString('pt-BR')}
+                    </span>
+                    {publicacaoVisualizada.modificado_por_usuario ? (
+                      <span className="text-xs font-bold text-amber-600 bg-amber-50 px-2 py-1 rounded-lg flex items-center gap-1">
+                        ✏️ Última modificação: {publicacaoVisualizada.modificado_por_usuario.email?.split('@')[0]}
+                      </span>
+                    ) : publicacaoVisualizada.autor ? (
+                      <span className="text-xs font-bold text-slate-500 bg-slate-100 px-2 py-1 rounded-lg flex items-center gap-1">
+                        👤 Publicado por: {publicacaoVisualizada.autor.email?.split('@')[0]}
+                      </span>
+                    ) : null}
+                  </div>
+                )}
                 {scriptVisualizado && (
                   <button onClick={() => copiarParaAreaTransferencia(decodificarHTML(scriptVisualizado.conteudo), scriptVisualizado.titulo)} className="flex items-center gap-2 text-sm font-bold bg-[#00A859]/10 text-[#008C4A] hover:bg-blue-200 px-4 py-2 rounded-xl transition-colors">
                     <Copy size={16}/> Copiar Texto Inteiro

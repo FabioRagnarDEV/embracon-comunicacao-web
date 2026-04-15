@@ -811,6 +811,15 @@ export default function DashboardMonitoria() {
                             <span className="text-xs text-[#00A859] font-bold flex items-center gap-1.5 bg-[#00A859]/5 px-3 py-1.5 rounded-lg">
                               <Tag size={12}/> {comunicado.tags}
                             </span>
+                            {comunicado.modificado_por_usuario ? (
+                              <span className="text-xs font-bold text-amber-600 bg-amber-50 px-3 py-1.5 rounded-lg flex items-center gap-1">
+                                ✏️ Modificado por: {comunicado.modificado_por_usuario.email?.split('@')[0]}
+                              </span>
+                            ) : comunicado.autor ? (
+                              <span className="text-xs font-bold text-slate-500 bg-slate-100 px-3 py-1.5 rounded-lg flex items-center gap-1">
+                                👤 Por: {comunicado.autor.email?.split('@')[0]}
+                              </span>
+                            ) : null}
                             
                             {/* SELO DE CURTIDAS AQUI */}
                             <span className="text-xs text-red-500 font-bold flex items-center gap-1.5 bg-red-50 px-3 py-1.5 rounded-lg">
@@ -1145,6 +1154,15 @@ export default function DashboardMonitoria() {
                   <span className="text-xs font-bold text-[#00A859] flex items-center gap-1.5">
                     <Tag size={14}/> {publicacaoVisualizada.tags}
                   </span>
+                  {publicacaoVisualizada.modificado_por_usuario ? (
+                    <span className="text-xs font-bold text-amber-600 bg-amber-50 px-3 py-1 rounded-lg flex items-center gap-1">
+                      ✏️ Última modificação: {publicacaoVisualizada.modificado_por_usuario.email?.split('@')[0]}
+                    </span>
+                  ) : publicacaoVisualizada.autor ? (
+                    <span className="text-xs font-bold text-slate-500 bg-slate-100 px-3 py-1 rounded-lg flex items-center gap-1">
+                      👤 Publicado por: {publicacaoVisualizada.autor.email?.split('@')[0]}
+                    </span>
+                  ) : null}
                 </div>
               </div>
               <button 
