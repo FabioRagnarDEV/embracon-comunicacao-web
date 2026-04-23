@@ -1,3 +1,141 @@
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
+
+@layer base {
+  html {
+    -webkit-text-size-adjust: 100%;
+    text-size-adjust: 100%;
+  }
+
+  @media (min-width: 1920px) { html { font-size: 18px; } }
+  @media (min-width: 2560px) { html { font-size: 22px; } }
+}
+
+@layer utilities {
+  .hide-scrollbar {
+    -ms-overflow-style: none;
+    scrollbar-width: none;
+  }
+  .hide-scrollbar::-webkit-scrollbar { display: none; }
+
+  .line-clamp-2 {
+    display: -webkit-box;
+    -webkit-line-clamp: 2;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+  }
+  .line-clamp-3 {
+    display: -webkit-box;
+    -webkit-line-clamp: 3;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+  }
+
+  .responsive-container {
+    width: 100%;
+    max-width: 80rem;
+    margin-left: auto;
+    margin-right: auto;
+    padding-left: 1rem;
+    padding-right: 1rem;
+  }
+  @media (min-width: 640px)  { .responsive-container { padding-left: 1.5rem; padding-right: 1.5rem; } }
+  @media (min-width: 1024px) { .responsive-container { padding-left: 2rem;   padding-right: 2rem;   } }
+  @media (min-width: 1920px) { .responsive-container { max-width: 110rem; padding-left: 3rem; padding-right: 3rem; } }
+  @media (min-width: 2560px) { .responsive-container { max-width: 140rem; padding-left: 4rem; padding-right: 4rem; } }
+}
+
+/* ═══════════════════════════════════════════════════════════════
+   SISTEMA DE PERSONALIZAÇÃO — CSS Variables
+   Todos os elementos que usam as classes abaixo respondem
+   automaticamente quando o dashboard muda as CSS vars no root.
+   ═══════════════════════════════════════════════════════════════ */
+
+/* Botões e elementos com cor primária */
+.btn-primario,
+.aba-ativa,
+.badge-primario {
+  background: var(--cor-primaria) !important;
+  color: #fff !important;
+}
+
+/* Bordas e destaques */
+.borda-primaria  { border-color: var(--cor-primaria) !important; }
+.texto-primario  { color: var(--cor-primaria) !important; }
+.fundo-primario  { background-color: var(--cor-primaria) !important; }
+
+/* Cards — adaptam ao tema escuro/claro */
+.tema-escuro .dashboard-card,
+.tema-escuro .bg-white,
+.tema-escuro [class*="bg-white"] {
+  background-color: #1e293b !important;
+  border-color: #334155 !important;
+  color: var(--cor-texto, #f1f5f9) !important;
+}
+
+.tema-escuro .text-slate-800,
+.tema-escuro .text-slate-900,
+.tema-escuro h1, .tema-escuro h2, .tema-escuro h3, .tema-escuro h4 {
+  color: var(--cor-texto, #f1f5f9) !important;
+}
+
+.tema-escuro .text-slate-600,
+.tema-escuro .text-slate-500 {
+  color: #94a3b8 !important;
+}
+
+.tema-escuro .bg-slate-50,
+.tema-escuro .bg-slate-100 {
+  background-color: #0f172a !important;
+}
+
+.tema-escuro .border-slate-100,
+.tema-escuro .border-slate-200 {
+  border-color: #334155 !important;
+}
+
+.tema-escuro input,
+.tema-escuro textarea {
+  background-color: #1e293b !important;
+  border-color: #334155 !important;
+  color: #f1f5f9 !important;
+}
+
+.tema-escuro input::placeholder,
+.tema-escuro textarea::placeholder {
+  color: #64748b !important;
+}
+
+/* Modo minimalista — remove sombras e bordas decorativas */
+.minimalista * {
+  box-shadow: none !important;
+  text-shadow: none !important;
+}
+.minimalista .rounded-3xl { border-radius: 0.75rem !important; }
+.minimalista .rounded-2xl { border-radius: 0.5rem !important; }
+
+/* Modais de leitura — sempre isolados do tema, fundo branco fixo */
+.modal-leitura,
+.modal-leitura .ql-editor,
+.modal-leitura .ql-snow,
+.modal-leitura .ql-container {
+  background-color: #ffffff !important;
+  color: #334155 !important;
+}
+
+/* Garante que o tema escuro não invada o modal */
+.tema-escuro .modal-leitura,
+.tema-escuro .modal-leitura * {
+  background-color: inherit;
+  color: inherit;
+}
+.tema-escuro .modal-leitura { background-color: #ffffff !important; color: #334155 !important; }
+.tema-escuro .modal-leitura p,
+.tema-escuro .modal-leitura span,
+.tema-escuro .modal-leitura li,
+.tema-escuro .modal-leitura div:not([class*="ql-"]) { color: #334155 !important; }
+.tema-escuro .modal-leitura strong { color: #0f172a !important; }
+.tema-escuro .modal-leitura h1,
+.tema-escuro .modal-leitura h2,
+.tema-escuro .modal-leitura h3 { color: #0f172a !important; }

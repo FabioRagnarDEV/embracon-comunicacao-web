@@ -3,12 +3,14 @@ import ReactQuill from 'react-quill-new';
 import { 
   Plus, Search, Edit2, Trash2, X, Save, 
   Paperclip, Tag, FileText, Calendar, AlertCircle, CheckCircle2,
-  BarChart3, Flame, Clock, Users, LogOut, Heart, Download, TrendingUp, Eye, Award, HelpCircle 
+  BarChart3, Flame, Clock, Users, LogOut, Heart, Download, TrendingUp, Eye, Award, HelpCircle, Palette
 } from 'lucide-react';
 
 import 'react-quill-new/dist/quill.snow.css';
 import { comunicadosService, relatoriosService } from '../services/api';
 import backgroundImage from '../assets/telainiciaMonitoria .png';
+import { usePersonalizacao } from '../hooks/usePersonalizacao';
+import PainelPersonalizacao from '../components/PainelPersonalizacao';
 
 // Registrar fontes personalizadas no Quill
 const Font = ReactQuill.Quill.import('formats/font');
@@ -64,6 +66,9 @@ const modulosQuill = {
 };
 
 export default function DashboardMonitoria() {
+  const personalizacao = usePersonalizacao('monitoria');
+  const { rascunho, painelAberto, setPainelAberto, getEstilo, classeAnimacao, classeMinimalista, classeTema } = personalizacao;
+
   const [abaAtiva, setAbaAtiva] = useState('comunicados');
 
   const [titulo, setTitulo] = useState('');
@@ -293,13 +298,14 @@ export default function DashboardMonitoria() {
   );
 
   return (
-    <div className="min-h-screen bg-[#F8FAFC] p-4 md:p-8 font-sans text-slate-900 relative" style={{
-      backgroundImage: `linear-gradient(rgba(248, 250, 252, 0.92), rgba(248, 250, 252, 0.92)), url(${backgroundImage})`,
-      backgroundSize: 'cover',
-      backgroundPosition: 'center',
-      backgroundAttachment: 'fixed'
-    }}>
-      <div className="max-w-5xl mx-auto space-y-10">
+    <div className={`min-h-screen p-3 sm:p-4 md:p-6 lg:p-8 xl:p-10 tv:p-16 font-sans relative ${classeAnimacao} ${classeMinimalista} ${classeTema}`} style={getEstilo(backgroundImage)}>
+      {painelAberto && (
+        <PainelPersonalizacao
+          {...personalizacao}
+          onFechar={() => setPainelAberto(false)}
+        />
+      )}
+      <div className="max-w-5xl xl:max-w-6xl 2xl:max-w-7xl tv:max-w-[100rem] mx-auto space-y-8 tv:space-y-12">
 
         <style>{`
         /* IMPORTAR FONTES DO GOOGLE FONTS */
@@ -607,15 +613,15 @@ export default function DashboardMonitoria() {
         }
       `}</style>
         
-        <header className="flex flex-col md:flex-row md:items-start justify-between gap-6">
-          <div className="flex-1">
-            <div className="flex items-center gap-3 mb-2">
-              <h1 className="text-2xl font-extrabold tracking-tight text-slate-800">
+        <header className="flex flex-col md:flex-row md:items-start justify-between gap-4 sm:gap-6">
+          <div className="flex-1 min-w-0">
+            <div className="flex items-center gap-3 mb-1 sm:mb-2">
+              <h1 className="text-xl sm:text-2xl lg:text-3xl tv:text-5xl font-extrabold tracking-tight text-slate-800 flex flex-wrap items-center gap-2">
                 {nomePreferido ? (
                   <>
                     {obterSaudacao()}, {nomePreferido}!
                     {tratamento && (
-                      <span className="ml-2 text-2xl">
+                      <span className="ml-1 sm:ml-2 text-xl sm:text-2xl tv:text-4xl">
                         {tratamento === 'feminino' ? '👩‍💼' : '👨‍💼'}
                       </span>
                     )}
@@ -625,34 +631,47 @@ export default function DashboardMonitoria() {
                 )}
               </h1>
             </div>
-            <p className="text-slate-600 font-medium mb-1">
+            <p className="text-slate-600 font-medium mb-0.5 sm:mb-1 text-sm sm:text-base tv:text-xl">
               Aqui é o seu dashboard de Monitoria
             </p>
-            <p className="text-slate-500 text-sm">
+            <p className="text-slate-500 text-xs sm:text-sm tv:text-lg hidden sm:block">
               Você pode publicar qualquer conteúdo e todos os usuários cadastrados irão ver
             </p>
           </div>
           <div className="flex flex-col items-start md:items-end gap-3">
-            <div className="flex items-center gap-3">
+            <div className="flex flex-wrap items-center gap-2 sm:gap-3">
+              <button
+                onClick={() => setPainelAberto(true)}
+                className="flex items-center gap-2 px-3 sm:px-4 py-2 tv:py-3 tv:px-6 tv:text-lg text-white text-sm font-bold rounded-xl transition-all shadow-lg active:scale-95"
+                style={{ background: `linear-gradient(135deg, ${rascunho.corPrimaria}, ${rascunho.corSecundaria})`, boxShadow: `0 4px 15px ${rascunho.corPrimaria}40` }}
+              >
+                <Palette size={16} /> <span className="hidden sm:inline">Personalize</span>
+              </button>
               <button 
                 onClick={() => setModalInstrucoes(true)}
-                className="flex items-center gap-2 px-4 py-2 bg-gradient-to-r from-emerald-500 to-emerald-600 hover:from-emerald-600 hover:to-emerald-700 text-white text-sm font-bold rounded-xl transition-all shadow-lg shadow-emerald-200 hover:shadow-xl hover:shadow-emerald-300 active:scale-95"
+                className="flex items-center gap-2 px-3 sm:px-4 py-2 tv:py-3 tv:px-6 tv:text-lg bg-gradient-to-r from-emerald-500 to-emerald-600 hover:from-emerald-600 hover:to-emerald-700 text-white text-sm font-bold rounded-xl transition-all shadow-lg shadow-emerald-200 hover:shadow-xl hover:shadow-emerald-300 active:scale-95"
               >
-                <HelpCircle size={18} /> Instruções de Uso
+                <HelpCircle size={18} /> <span className="hidden sm:inline">Instruções de Uso</span><span className="sm:hidden">Ajuda</span>
               </button>
-              <span className="hidden md:inline-block bg-[#00A859]/5 text-[#008C4A] text-xs font-bold px-3 py-1 rounded-full border border-[#00A859]/20">
+              <span className="hidden lg:inline-block bg-[#00A859]/5 text-[#008C4A] text-xs font-bold px-3 py-1 rounded-full border border-[#00A859]/20">
                 PAINEL ADMINISTRATIVO
               </span>
-              <button onClick={() => setModalLogoutAberto(true)} className="flex items-center gap-2 px-4 py-2 bg-gradient-to-r from-red-500 to-red-600 hover:from-red-600 hover:to-red-700 text-white text-sm font-bold rounded-xl transition-all shadow-lg shadow-red-200 hover:shadow-xl hover:shadow-red-300 active:scale-95">
-                <LogOut size={16} /> Sair
+              <button onClick={() => setModalLogoutAberto(true)} className="flex items-center gap-2 px-3 sm:px-4 py-2 tv:py-3 tv:px-6 tv:text-lg bg-gradient-to-r from-red-500 to-red-600 hover:from-red-600 hover:to-red-700 text-white text-sm font-bold rounded-xl transition-all shadow-lg shadow-red-200 hover:shadow-xl hover:shadow-red-300 active:scale-95">
+                <LogOut size={16} /> <span className="hidden sm:inline">Sair</span>
               </button>
             </div>
-            <div className="flex gap-2 p-1 bg-white/80 backdrop-blur-sm rounded-2xl w-fit shadow-lg border border-slate-200">
-              <button onClick={() => setAbaAtiva('comunicados')} className={`flex items-center gap-2 px-6 py-2.5 rounded-xl font-bold text-sm transition-all whitespace-nowrap ${abaAtiva === 'comunicados' ? 'bg-gradient-to-r from-[#00A859] to-[#008C4A] text-white shadow-lg shadow-[#00A859]/20' : 'text-slate-600 hover:bg-slate-50 hover:text-slate-900'}`}>
-                <FileText size={16}/> Comunicados
+            <div className="flex gap-1 sm:gap-2 p-1 bg-white/80 backdrop-blur-sm rounded-2xl w-fit shadow-lg border border-slate-200 overflow-x-auto hide-scrollbar max-w-full">
+              <button onClick={() => setAbaAtiva('comunicados')}
+                className="flex items-center gap-1.5 sm:gap-2 px-3 sm:px-5 lg:px-6 tv:px-8 py-2 sm:py-2.5 tv:py-4 rounded-xl font-bold text-xs sm:text-sm tv:text-base transition-all whitespace-nowrap"
+                style={abaAtiva === 'comunicados' ? { background: `linear-gradient(135deg, ${rascunho.corPrimaria}, ${rascunho.corSecundaria})`, color: '#fff' } : { color: '#475569' }}
+              >
+                <FileText size={15} className="sm:hidden"/><FileText size={16} className="hidden sm:block"/> Comunicados
               </button>
-              <button onClick={() => setAbaAtiva('relatorios')} className={`flex items-center gap-2 px-6 py-2.5 rounded-xl font-bold text-sm transition-all whitespace-nowrap ${abaAtiva === 'relatorios' ? 'bg-gradient-to-r from-[#00A859] to-[#008C4A] text-white shadow-lg shadow-[#00A859]/20' : 'text-slate-600 hover:bg-slate-50 hover:text-slate-900'}`}>
-                <BarChart3 size={16}/> Relatórios
+              <button onClick={() => setAbaAtiva('relatorios')}
+                className="flex items-center gap-1.5 sm:gap-2 px-3 sm:px-5 lg:px-6 tv:px-8 py-2 sm:py-2.5 tv:py-4 rounded-xl font-bold text-xs sm:text-sm tv:text-base transition-all whitespace-nowrap"
+                style={abaAtiva === 'relatorios' ? { background: `linear-gradient(135deg, ${rascunho.corPrimaria}, ${rascunho.corSecundaria})`, color: '#fff' } : { color: '#475569' }}
+              >
+                <BarChart3 size={15} className="sm:hidden"/><BarChart3 size={16} className="hidden sm:block"/> Relatórios
               </button>
             </div>
           </div>
@@ -663,13 +682,15 @@ export default function DashboardMonitoria() {
             {/* FORMULÁRIO DE PUBLICAÇÃO */}
             <section className={`bg-white rounded-3xl shadow-xl shadow-slate-200/50 overflow-hidden border border-slate-100 transition-all duration-500 ${idEmEdicao ? 'ring-2 ring-orange-400' : ''}`}>
               <div className="p-1 border-b border-slate-50 bg-slate-50/50">
-                <div className={`px-6 py-3 flex items-center gap-2 font-bold text-sm ${idEmEdicao ? 'text-orange-600' : 'text-[#00A859]'}`}>
+                <div className={`px-6 py-3 flex items-center gap-2 font-bold text-sm ${idEmEdicao ? 'text-orange-600' : ''}`}
+                  style={!idEmEdicao ? { color: rascunho.corPrimaria } : {}}
+                >
                   {idEmEdicao ? <Edit2 size={16}/> : <Plus size={16}/>}
                   {idEmEdicao ? 'MODO DE EDIÇÃO' : 'NOVA PUBLICAÇÃO'}
                 </div>
               </div>
 
-              <form onSubmit={handleSalvarComunicado} className="p-8 space-y-6">
+              <form onSubmit={handleSalvarComunicado} className="p-4 sm:p-6 md:p-8 tv:p-12 space-y-5 sm:space-y-6">
                 {mensagem.texto && (
                   <div className={`flex items-center gap-3 px-4 py-3 rounded-xl border animate-in fade-in slide-in-from-top-2 ${
                     mensagem.tipo === 'erro' ? 'bg-red-50 border-red-100 text-red-700' : 
@@ -706,7 +727,7 @@ export default function DashboardMonitoria() {
                     </div>
                   </div>
 
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4 sm:gap-6">
                     <div className="space-y-1">
                       <label className="text-xs font-bold text-slate-500 uppercase tracking-wider ml-1 flex items-center gap-1">
                         <Tag size={12}/> Tags de Busca
@@ -735,13 +756,12 @@ export default function DashboardMonitoria() {
                   </div>
                 </div>
 
-                <div className="flex flex-col md:flex-row gap-3 pt-4">
+                <div className="flex flex-col sm:flex-row gap-3 pt-4">
                   <button 
                     type="submit" 
                     disabled={carregando}
-                    className={`flex-1 flex items-center justify-center gap-2 text-white font-bold py-4 px-6 rounded-2xl transition-all shadow-lg hover:shadow-xl active:scale-[0.98] disabled:opacity-70 ${
-                      idEmEdicao ? 'bg-gradient-to-r from-orange-500 to-orange-600 hover:from-orange-600 hover:to-orange-700 shadow-orange-200 hover:shadow-orange-300' : 'bg-gradient-to-r from-[#00A859] to-[#008C4A] hover:from-[#008C4A] hover:to-[#00A859] shadow-[#00A859]/20 hover:shadow-[#00A859]/30'
-                    }`}
+                    className={`flex-1 flex items-center justify-center gap-2 text-white font-bold py-4 px-6 rounded-2xl transition-all shadow-lg hover:shadow-xl active:scale-[0.98] disabled:opacity-70 ${idEmEdicao ? 'bg-gradient-to-r from-orange-500 to-orange-600 hover:from-orange-600 hover:to-orange-700 shadow-orange-200' : ''}`}
+                    style={!idEmEdicao ? { background: `linear-gradient(135deg, ${rascunho.corPrimaria}, ${rascunho.corSecundaria})` } : {}}
                   >
                     {carregando ? (
                       <div className="h-5 w-5 border-2 border-white/30 border-t-white rounded-full animate-spin" />
@@ -768,13 +788,13 @@ export default function DashboardMonitoria() {
 
             {/* LISTAGEM E BUSCA */}
             <section className="space-y-6 pb-20">
-              <div className="flex flex-col md:flex-row md:items-end justify-between gap-4 px-2">
+              <div className="flex flex-col sm:flex-row sm:items-end justify-between gap-4 px-2">
                 <div>
                   <h2 className="text-xl font-bold text-slate-800">Histórico de Publicações</h2>
                   <p className="text-slate-500 text-sm">Visualize e gerencie os conteúdos existentes.</p>
                 </div>
                 
-                <div className="relative w-full md:w-80 group">
+                <div className="relative w-full sm:w-72 md:w-80 tv:w-[28rem] group">
                   <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400 group-focus-within:text-[#00A859] transition-colors" size={18} />
                   <input 
                     type="text" 
@@ -797,7 +817,7 @@ export default function DashboardMonitoria() {
                 ) : (
                   comunicadosFiltrados.map((comunicado) => (
                     <div key={comunicado.id} className="bg-white rounded-3xl border border-slate-100 transition-all duration-300 shadow-sm hover:shadow-xl hover:shadow-slate-200/40 overflow-hidden">
-                      <div className="p-6 md:p-8 flex flex-col md:flex-row md:items-center justify-between gap-6">
+                      <div className="p-4 sm:p-6 md:p-8 tv:p-10 flex flex-col md:flex-row md:items-center justify-between gap-4 sm:gap-6">
                         
                         <div className="flex-1">
                           <h3 className="font-extrabold text-xl text-slate-800 leading-tight mb-3">
@@ -836,7 +856,8 @@ export default function DashboardMonitoria() {
 
                           <button 
                             onClick={() => setPublicacaoVisualizada(comunicado)}
-                            className="inline-flex items-center gap-2 text-sm font-bold text-white transition-all bg-gradient-to-r from-[#00A859] to-[#008C4A] hover:from-[#008C4A] hover:to-[#00A859] px-5 py-2.5 rounded-xl shadow-lg shadow-[#00A859]/20 hover:shadow-xl hover:shadow-[#00A859]/30 active:scale-95"
+                            className="inline-flex items-center gap-2 text-sm font-bold text-white transition-all px-5 py-2.5 rounded-xl shadow-lg active:scale-95"
+                            style={{ background: `linear-gradient(135deg, ${rascunho.corPrimaria}, ${rascunho.corSecundaria})` }}
                           >
                             <FileText size={16}/> Ver publicação e Interações
                           </button>
@@ -870,10 +891,12 @@ export default function DashboardMonitoria() {
           <div className="space-y-6 animate-in fade-in duration-500 pb-20">
             
             {/* HEADER COM BOTÃO DE DOWNLOAD */}
-            <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 bg-white p-6 rounded-3xl shadow-sm border border-slate-100">
+            <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 bg-white p-4 sm:p-6 tv:p-10 rounded-3xl shadow-sm border border-slate-100">
               <div>
                 <h2 className="text-2xl font-extrabold text-slate-800 flex items-center gap-3">
-                  <div className="bg-gradient-to-br from-[#00A859] to-[#008C4A] p-3 rounded-2xl text-white shadow-lg shadow-[#00A859]/20">
+                  <div className="p-3 rounded-2xl text-white shadow-lg"
+                    style={{ background: `linear-gradient(135deg, ${rascunho.corPrimaria}, ${rascunho.corSecundaria})` }}
+                  >
                     <BarChart3 size={24} />
                   </div>
                   Relatórios e Análises
@@ -890,7 +913,7 @@ export default function DashboardMonitoria() {
             </div>
 
             {/* CARDS DE MÉTRICAS RESUMIDAS */}
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 tv:grid-cols-3 gap-3 sm:gap-4 tv:gap-6">
               <div className="bg-gradient-to-br from-[#00A859] to-[#008C4A] p-6 rounded-3xl shadow-xl text-white relative overflow-hidden">
                 <div className="absolute top-0 right-0 w-32 h-32 bg-white/10 rounded-full -mr-16 -mt-16"></div>
                 <div className="relative">
@@ -935,7 +958,7 @@ export default function DashboardMonitoria() {
             </div>
 
             {/* RANKING DOS MAIS ACESSADOS - ESTILO POWER BI */}
-            <div className="bg-white p-6 md:p-8 rounded-3xl shadow-xl border border-slate-100">
+            <div className="bg-white p-4 sm:p-6 md:p-8 tv:p-12 rounded-3xl shadow-xl border border-slate-100">
               <div className="flex items-center justify-between mb-6">
                 <div className="flex items-center gap-3">
                   <div className="bg-gradient-to-br from-orange-500 to-red-500 p-3 rounded-2xl text-white shadow-lg shadow-orange-200">
@@ -1013,8 +1036,8 @@ export default function DashboardMonitoria() {
             </div>
 
             {/* AUDITORIA INDIVIDUAL - REDESENHADA */}
-            <div className="bg-white p-6 md:p-8 rounded-3xl shadow-xl border border-slate-100">
-              <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 mb-6">
+            <div className="bg-white p-4 sm:p-6 md:p-8 tv:p-12 rounded-3xl shadow-xl border border-slate-100">
+              <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mb-6">
                 <div className="flex items-center gap-3">
                   <div className="bg-gradient-to-br from-[#00A859] to-[#008C4A] p-3 rounded-2xl text-white shadow-lg shadow-[#00A859]/20">
                     <Users size={24} />
@@ -1024,7 +1047,7 @@ export default function DashboardMonitoria() {
                     <p className="text-sm text-slate-500">Rastreamento detalhado de cada acesso aos comunicados</p>
                   </div>
                 </div>
-                <div className="relative w-full md:w-80 group">
+                <div className="relative w-full sm:w-72 md:w-80 tv:w-[28rem] group">
                   <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400 group-focus-within:text-[#00A859] transition-colors" size={18} />
                   <input 
                     type="text" 
@@ -1137,21 +1160,28 @@ export default function DashboardMonitoria() {
       {/* MODAL TELA CHEIA (COM OS NOMES DE QUEM CURTIU)           */}
       {/* ======================================================== */}
       {publicacaoVisualizada && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 sm:p-6 bg-slate-900/60 backdrop-blur-sm animate-in fade-in duration-200">
+        <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-0 sm:p-4 lg:p-6 tv:p-12 bg-slate-900/60 backdrop-blur-sm animate-in fade-in duration-200">
           
-          <div className="bg-white rounded-3xl shadow-2xl w-full max-w-4xl max-h-[90vh] flex flex-col overflow-hidden animate-in zoom-in-95 duration-200">
+          {/* Modal isolado do tema — sempre fundo branco, texto escuro */}
+          <div className="rounded-t-3xl sm:rounded-3xl shadow-2xl w-full sm:max-w-2xl lg:max-w-4xl xl:max-w-5xl tv:max-w-7xl max-h-[95vh] sm:max-h-[90vh] flex flex-col overflow-hidden animate-in slide-in-from-bottom sm:zoom-in-95 duration-200"
+            style={{ background: '#ffffff', color: '#1e293b' }}
+          >
             
-            <div className="p-6 md:p-8 border-b border-slate-100 bg-slate-50/50 flex justify-between items-start gap-4 shrink-0">
-              <div>
-                <h2 className="text-2xl md:text-3xl font-extrabold text-slate-800 leading-tight mb-3">
+            <div className="p-4 sm:p-6 md:p-8 tv:p-12 border-b flex justify-between items-start gap-4 shrink-0"
+              style={{ background: '#f8fafc', borderColor: '#e2e8f0' }}
+            >
+              <div className="flex-1 min-w-0">
+                <h2 className="text-xl sm:text-2xl md:text-3xl tv:text-4xl font-extrabold leading-tight mb-2 sm:mb-3"
+                  style={{ color: '#0f172a' }}
+                >
                   {publicacaoVisualizada.titulo}
                 </h2>
                 <div className="flex flex-wrap items-center gap-3">
-                  <span className="text-xs font-bold text-slate-500 uppercase tracking-widest flex items-center gap-1.5">
+                  <span className="text-xs font-bold uppercase tracking-widest flex items-center gap-1.5" style={{ color: '#64748b' }}>
                     <Calendar size={14}/> Publicado em {new Date(publicacaoVisualizada.criado_em).toLocaleDateString('pt-BR')}
                   </span>
                   <span className="w-1.5 h-1.5 rounded-full bg-slate-300"></span>
-                  <span className="text-xs font-bold text-[#00A859] flex items-center gap-1.5">
+                  <span className="text-xs font-bold flex items-center gap-1.5" style={{ color: rascunho.corPrimaria }}>
                     <Tag size={14}/> {publicacaoVisualizada.tags}
                   </span>
                   {publicacaoVisualizada.modificado_por_usuario ? (
@@ -1167,17 +1197,21 @@ export default function DashboardMonitoria() {
               </div>
               <button 
                 onClick={() => setPublicacaoVisualizada(null)}
-                className="p-2 text-slate-400 hover:text-slate-700 hover:bg-slate-200 rounded-full transition-all shrink-0"
+                className="p-2 rounded-full transition-all shrink-0"
+                style={{ color: '#94a3b8', background: '#f1f5f9' }}
                 title="Fechar Visualização"
               >
                 <X size={24} />
               </button>
             </div>
 
-            <div className="p-6 md:p-10 overflow-y-auto bg-white modal-leitura">
+            <div className="p-6 md:p-10 overflow-y-auto modal-leitura"
+              style={{ background: '#ffffff', color: '#334155' }}
+            >
                <div className="ql-snow">
                   <div 
-                    className="ql-editor text-slate-800" 
+                    className="ql-editor"
+                    style={{ color: '#334155', background: '#ffffff' }}
                     dangerouslySetInnerHTML={{ __html: decodificarHTML(publicacaoVisualizada.conteudo) }} 
                   />
                </div>
@@ -1185,11 +1219,13 @@ export default function DashboardMonitoria() {
 
             {/* LISTA DE QUEM CURTIU */}
             {publicacaoVisualizada.curtidas_comunicados?.length > 0 && (
-              <div className="px-6 py-4 md:px-8 border-t border-slate-100 bg-red-50/30 shrink-0">
+              <div className="px-6 py-4 md:px-8 border-t shrink-0"
+                style={{ background: '#fff5f5', borderColor: '#fecaca' }}
+              >
                 <h4 className="text-[10px] font-black text-red-500 uppercase tracking-[0.2em] mb-3 flex items-center gap-2">
                   <Heart size={14} className="fill-current"/> Curtido por ({publicacaoVisualizada.curtidas_comunicados.length} pessoas)
                 </h4>
-                <div className="flex flex-wrap gap-2 text-sm text-slate-700 font-bold">
+                <div className="flex flex-wrap gap-2 text-sm font-bold" style={{ color: '#475569' }}>
                   {publicacaoVisualizada.curtidas_comunicados.map((curtida, idx) => (
                     <span key={idx} className="bg-white border border-red-100 px-3 py-1.5 rounded-lg shadow-sm">
                       {curtida.usuarios?.nome_completo || 'Usuário Desconhecido'}
@@ -1200,8 +1236,10 @@ export default function DashboardMonitoria() {
             )}
 
             {publicacaoVisualizada.anexos_comunicados?.length > 0 && (
-              <div className="p-6 md:p-8 border-t border-slate-100 bg-slate-50 shrink-0">
-                <h4 className="text-[10px] font-black text-slate-500 uppercase tracking-[0.2em] mb-4 flex items-center gap-2">
+              <div className="p-6 md:p-8 border-t shrink-0"
+                style={{ background: '#f8fafc', borderColor: '#e2e8f0' }}
+              >
+                <h4 className="text-[10px] font-black uppercase tracking-[0.2em] mb-4 flex items-center gap-2" style={{ color: '#64748b' }}>
                   <Paperclip size={14}/> Arquivos Oficiais em Anexo
                 </h4>
                 <div className="flex flex-wrap gap-3">
