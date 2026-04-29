@@ -49,7 +49,7 @@ export default function Login() {
           </div>
           <div className="space-y-4">
             <h2 className="text-4xl font-bold tracking-tight text-white">
-              Plataforma Integradora
+              Fique Ligado
             </h2>
             <p className="text-slate-400 text-lg">
               Conectando equipes e simplificando a comunicação de ponta a ponta.
