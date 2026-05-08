@@ -29,6 +29,9 @@ const LAYOUTS = [
   { id: 'kanban',    nome: 'Kanban',     desc: 'Colunas por data',          icon: '⊞' },
   { id: 'compacto',  nome: 'Compacto',   desc: 'Máxima densidade',          icon: '≡' },
   { id: 'magazine',  nome: 'Magazine',   desc: 'Destaque + grade',          icon: '◈' },
+  { id: 'timeline',  nome: 'Timeline',   desc: 'Linha do tempo vertical',   icon: '⋮' },
+  { id: 'galeria',   nome: 'Galeria',    desc: 'Grade visual ampla',        icon: '⊟' },
+  { id: 'tabela',    nome: 'Tabela',     desc: 'Linhas e colunas',          icon: '⊞' },
 ];
 
 export default function PainelPersonalizacao({
@@ -355,6 +358,37 @@ export default function PainelPersonalizacao({
                       <p className="text-xs" style={{ color: corTextoSec }}>{desc}</p>
                     </div>
                     {rascunho.layout === id && (
+                      <Check size={16} style={{ color: rascunho.corPrimaria }} />
+                    )}
+                  </button>
+                ))}
+              </div>
+
+              <div className="space-y-2">
+                <p className="text-xs font-bold uppercase tracking-wider" style={{ color: corTextoSec }}>
+                  Organização dos comunicados
+                </p>
+                {[
+                  { id: 'livre',  nome: 'Livre',   desc: 'Sem agrupamento, ordem cronológica', icon: '📋' },
+                  { id: 'pastas', nome: 'Pastas',  desc: 'Agrupado por categoria/assunto',     icon: '📁' },
+                ].map(({ id, nome, desc, icon }) => (
+                  <button
+                    key={id}
+                    onClick={() => atualizar('organizacao', id)}
+                    className="w-full flex items-center gap-3 p-3.5 rounded-2xl border-2 transition-all text-left"
+                    style={(rascunho.organizacao || 'livre') === id
+                      ? { borderColor: rascunho.corPrimaria, background: rascunho.corPrimaria + '10' }
+                      : { borderColor: corBorda, background: corCard }
+                    }
+                  >
+                    <span className="text-xl">{icon}</span>
+                    <div className="flex-1">
+                      <p className="text-sm font-bold"
+                        style={{ color: (rascunho.organizacao || 'livre') === id ? rascunho.corPrimaria : rascunho.corTexto }}
+                      >{nome}</p>
+                      <p className="text-xs" style={{ color: corTextoSec }}>{desc}</p>
+                    </div>
+                    {(rascunho.organizacao || 'livre') === id && (
                       <Check size={16} style={{ color: rascunho.corPrimaria }} />
                     )}
                   </button>

@@ -1,4 +1,5 @@
 ﻿import { useState, useEffect, useCallback, useRef } from 'react';
+import DOMPurify from 'dompurify';
 import ReactQuill from 'react-quill-new';
 import { 
   Search, Tag, FileText, Calendar, Paperclip, X, BookOpen, 
@@ -10,6 +11,10 @@ import backgroundImage from '../assets/atendenteDash.png';
 import { usePersonalizacao } from '../hooks/usePersonalizacao';
 import PainelPersonalizacao from '../components/PainelPersonalizacao';
 import LayoutComunicados from '../components/LayoutComunicados';
+import LayoutScripts from '../components/LayoutScripts';
+import UploadMidia from '../components/UploadMidia';
+import ModalVideo from '../components/ModalVideo';
+import { usePastas } from '../hooks/usePastas';
 
 // Registrar fontes personalizadas no Quill
 const Font = ReactQuill.Quill.import('formats/font');
@@ -33,41 +38,38 @@ Font.whitelist = [
 ];
 ReactQuill.Quill.register(Font, true);
 
-const modulosQuillSimples = {
-  toolbar: [
-    [{ 'font': [
-      'sans-serif',
-      'serif', 
-      'monospace',
-      'arial',
-      'georgia',
-      'impact',
-      'tahoma',
-      'times-new-roman',
-      'verdana',
-      'roboto',
-      'open-sans',
-      'lato',
-      'montserrat',
-      'poppins',
-      'raleway',
-      'ubuntu'
-    ] }],
-    ['bold', 'italic', 'underline'],
-    [{ 'list': 'ordered'}, { 'list': 'bullet' }],
-    ['link'], 
-    ['clean']
-  ]
-};
-
 export default function DashboardAtendente() {
   const personalizacao = usePersonalizacao('atendente');
   const { rascunho, painelAberto, setPainelAberto, getEstilo, classeAnimacao, classeMinimalista, classeTema } = personalizacao;
+  const pastasHook = usePastas();
 
   const [abaAtiva, setAbaAtiva] = useState('comunicados');
   const [mensagem, setMensagem] = useState({ tipo: '', texto: '' });
   const [carregando, setCarregando] = useState(true);
   const [termoBusca, setTermoBusca] = useState('');
+
+  // Estado do modal de vídeo para scripts
+  const [modalVideoScriptAberto, setModalVideoScriptAberto] = useState(false);
+
+  // Módulos do Quill com handler de vídeo customizado
+  const modulosQuillScriptComVideo = {
+    toolbar: {
+      container: [
+        [{ 'font': [
+          'sans-serif', 'serif', 'monospace', 'arial', 'georgia', 'impact',
+          'tahoma', 'times-new-roman', 'verdana', 'roboto', 'open-sans',
+          'lato', 'montserrat', 'poppins', 'raleway', 'ubuntu'
+        ] }],
+        ['bold', 'italic', 'underline'],
+        [{ 'list': 'ordered'}, { 'list': 'bullet' }],
+        ['link', 'image', 'video'],
+        ['clean']
+      ],
+      handlers: {
+        video: () => setModalVideoScriptAberto(true),
+      }
+    }
+  };
   
   const [listaComunicados, setListaComunicados] = useState([]);
   const [publicacaoVisualizada, setPublicacaoVisualizada] = useState(null);
@@ -81,6 +83,7 @@ export default function DashboardAtendente() {
   const [conteudoScript, setConteudoScript] = useState('');
   const [compartilharScript, setCompartilharScript] = useState(false);
   const [arquivosScript, setArquivosScript] = useState(null);
+  const [midiasScript, setMidiasScript] = useState([]);
   
   // 🔔 ESTADOS DO SININHO E SOM
   const [notificacoes, setNotificacoes] = useState([]);
@@ -165,9 +168,18 @@ export default function DashboardAtendente() {
 
   const decodificarHTML = (html) => {
     if (!html) return '';
+    // Importação dinâmica evitada: usar sanitização inline com DOMPurify
     const txt = document.createElement('textarea');
     txt.innerHTML = html;
-    return txt.value;
+    const decoded = txt.value;
+    // Sanitizar com DOMPurify para prevenir XSS
+    return DOMPurify.sanitize(decoded, {
+      ALLOWED_TAGS: ['p','br','strong','em','u','s','h1','h2','h3','h4','h5','h6','ul','ol','li','a','img','blockquote','code','pre','span','div','iframe','table','thead','tbody','tr','th','td','sub','sup','hr'],
+      ALLOWED_ATTR: ['href','src','alt','title','class','style','target','width','height','allowfullscreen','frameborder','rel','colspan','rowspan'],
+      ALLOW_DATA_ATTR: false,
+      FORBID_TAGS: ['script','object','embed','form','input','textarea','button'],
+      FORBID_ATTR: ['onerror','onload','onclick','onmouseover','onfocus','onblur'],
+    });
   };
 
   // ==========================================================
@@ -301,7 +313,7 @@ export default function DashboardAtendente() {
   };
 
   const abrirParaEdicao = (script, e) => { e.stopPropagation(); setTituloScript(script.titulo); setConteudoScript(decodificarHTML(script.conteudo)); setCompartilharScript(script.visivel_equipe); setIdEmEdicaoScript(script.id); setFormScriptAberto(true); window.scrollTo({ top: 0, behavior: 'smooth' }); };
-  const cancelarEdicaoScript = () => { setTituloScript(''); setConteudoScript(''); setCompartilharScript(false); setArquivosScript(null); setIdEmEdicaoScript(null); setFormScriptAberto(false); if (fileInputRef.current) fileInputRef.current.value = ""; };
+  const cancelarEdicaoScript = () => { setTituloScript(''); setConteudoScript(''); setCompartilharScript(false); setArquivosScript(null); setMidiasScript([]); setIdEmEdicaoScript(null); setFormScriptAberto(false); if (fileInputRef.current) fileInputRef.current.value = ""; };
   
   const salvarScript = async (e) => { 
     e.preventDefault(); 
@@ -316,6 +328,17 @@ export default function DashboardAtendente() {
       if (arquivosScript) { 
         Array.from(arquivosScript).forEach(arq => formData.append('arquivos', arq)); 
       } 
+
+      midiasScript.filter(m => m.tipo === 'arquivo' && m.arquivo).forEach(m => {
+        formData.append('arquivos', m.arquivo);
+      });
+      const youtubeLinks = midiasScript.filter(m => m.tipo === 'youtube');
+      if (youtubeLinks.length > 0) {
+        const iframes = youtubeLinks.map(m =>
+          `<div style="position:relative;padding-bottom:56.25%;height:0;overflow:hidden;margin:16px 0;border-radius:12px;"><iframe src="https://www.youtube.com/embed/${m.youtubeId}" style="position:absolute;top:0;left:0;width:100%;height:100%;border:0;border-radius:12px;" allowfullscreen></iframe></div>`
+        ).join('');
+        formData.set('conteudo', conteudoScript + iframes);
+      }
       
       if (idEmEdicaoScript) {
         await scriptsService.atualizar(idEmEdicaoScript, formData);
@@ -358,7 +381,9 @@ export default function DashboardAtendente() {
   const naoLidas = notificacoes.filter(n => !n.lida).length;
 
   // ── Classe de layout aplicada na tela inteira ──────────────────────────────
-  const layoutAtual = rascunho.modeFoco ? 'foco' : (rascunho.layout || 'cards');
+  const layoutAtual = rascunho.modeFoco ? 'foco'
+    : (rascunho.organizacao || 'livre') === 'pastas' ? 'pastas'
+    : (rascunho.layout || 'cards');
   const classeLayout = `layout-${layoutAtual}`;
 
   return (
@@ -391,11 +416,15 @@ export default function DashboardAtendente() {
       )}
 
       <div className={
-        layoutAtual === 'kanban'   ? 'h-screen flex flex-col' :
+        layoutAtual === 'kanban'   ? 'h-screen flex flex-col overflow-hidden' :
         layoutAtual === 'magazine' ? 'min-h-screen flex flex-col' :
         layoutAtual === 'compacto' ? 'max-w-3xl xl:max-w-4xl mx-auto space-y-3 p-3 sm:p-4' :
         layoutAtual === 'lista'    ? 'max-w-4xl xl:max-w-5xl mx-auto space-y-4 p-3 sm:p-4 md:p-6 lg:p-8' :
         layoutAtual === 'foco'     ? 'max-w-2xl mx-auto space-y-4 p-3 sm:p-4 md:p-6 lg:p-8' :
+        layoutAtual === 'timeline' ? 'max-w-4xl xl:max-w-5xl mx-auto space-y-4 p-3 sm:p-4 md:p-6 lg:p-8' :
+        layoutAtual === 'galeria'  ? 'max-w-6xl xl:max-w-7xl mx-auto space-y-4 p-3 sm:p-4 md:p-6 lg:p-8' :
+        layoutAtual === 'tabela'   ? 'max-w-5xl xl:max-w-6xl mx-auto space-y-4 p-3 sm:p-4 md:p-6 lg:p-8' :
+        layoutAtual === 'pastas'   ? 'max-w-4xl xl:max-w-5xl mx-auto space-y-4 p-3 sm:p-4 md:p-6 lg:p-8' :
         'max-w-5xl xl:max-w-6xl 2xl:max-w-7xl tv:max-w-[100rem] mx-auto space-y-6 lg:space-y-8 tv:space-y-12 p-3 sm:p-4 md:p-6 lg:p-8 xl:p-10 tv:p-16'
       }>
         {/* Header adaptativo por layout */}
@@ -508,92 +537,117 @@ export default function DashboardAtendente() {
             </div>
           </div>
         ) : (
-          /* CARDS / LISTA / COMPACTO: header padrão */
-          <header className="flex flex-col md:flex-row md:items-center justify-between gap-4 bg-white p-4 sm:p-6 md:p-8 rounded-3xl shadow-sm border border-slate-100 relative">
-            <div className="flex items-center justify-between w-full md:w-auto gap-4">
-              <div className="flex items-center gap-3 sm:gap-4">
-                <div className="p-2.5 sm:p-3 rounded-2xl text-white shadow-lg shrink-0"
-                  style={{ background: rascunho.corPrimaria, boxShadow: `0 4px 15px ${rascunho.corPrimaria}30` }}
-                >
-                  <BookOpen size={24} className="sm:hidden" />
-                  <BookOpen size={28} className="hidden sm:block" />
+          /* CARDS / LISTA / COMPACTO / TIMELINE / GALERIA / TABELA / PASTAS: header padrão responsivo */
+          <header className="bg-white rounded-3xl shadow-sm border border-slate-100 relative overflow-hidden">
+            {/* Barra superior — título + ações mobile */}
+            <div className="p-4 sm:p-5 md:p-6">
+              <div className="flex items-start justify-between gap-3">
+                {/* Logo + Título */}
+                <div className="flex items-start gap-3 min-w-0 flex-1">
+                  <div className="p-2 sm:p-2.5 rounded-xl text-white shadow-md shrink-0"
+                    style={{ background: rascunho.corPrimaria }}
+                  >
+                    <BookOpen size={22} />
+                  </div>
+                  <div className="min-w-0">
+                    <h1 className="text-base sm:text-lg md:text-xl lg:text-2xl font-extrabold tracking-tight text-slate-800 leading-tight">
+                      {nomePreferido ? (
+                        <>{obterSaudacao()}, {nomePreferido}! {tratamento && <span className="text-lg sm:text-xl">{tratamento === 'feminino' ? '👩‍💼' : '👨‍💼'}</span>}</>
+                      ) : 'Portal do Atendente'}
+                    </h1>
+                    <p className="text-slate-500 text-xs sm:text-sm mt-0.5 hidden xs:block">Aqui é o seu dashboard de Atendimento</p>
+                  </div>
                 </div>
-                <div className="flex-1 min-w-0">
-                  <h1 className="text-lg sm:text-xl md:text-2xl lg:text-3xl font-extrabold tracking-tight text-slate-800 flex flex-wrap items-center gap-2">
-                    {nomePreferido ? (
-                      <>
-                        {obterSaudacao()}, {nomePreferido}!
-                        {tratamento && <span className="text-xl sm:text-2xl">{tratamento === 'feminino' ? '👩‍💼' : '👨‍💼'}</span>}
-                      </>
-                    ) : 'Portal do Atendente'}
-                  </h1>
-                  <p className="text-slate-600 font-medium mt-0.5 text-sm sm:text-base">Aqui é o seu dashboard de Atendimento</p>
-                  <p className="text-slate-500 text-xs sm:text-sm hidden sm:block">Você pode visualizar comunicados, criar scripts pessoais e acessar conteúdos da equipe</p>
+
+                {/* Ações mobile — sempre visíveis em telas pequenas */}
+                <div className="flex items-center gap-1.5 shrink-0 md:hidden">
+                  <button onClick={() => setPainelAberto(true)} className="p-2 rounded-xl text-white" style={{ background: rascunho.corPrimaria }}>
+                    <Palette size={16} />
+                  </button>
+                  <button onClick={(e) => { e.stopPropagation(); setPainelNotificacoesAberto(!painelNotificacoesAberto); }}
+                    className="relative p-2 text-slate-500 bg-slate-50 rounded-xl"
+                  >
+                    <Bell size={16} />
+                    {naoLidas > 0 && <span className="absolute -top-0.5 -right-0.5 w-4 h-4 bg-red-500 text-white text-[9px] font-black flex items-center justify-center rounded-full">{naoLidas}</span>}
+                  </button>
+                  <button onClick={() => setModalLogoutAberto(true)} className="p-2 text-red-500 bg-red-50 rounded-xl">
+                    <LogOut size={16} />
+                  </button>
                 </div>
               </div>
-              <div className="flex md:hidden items-center gap-2 shrink-0">
-                <button onClick={() => setPainelAberto(true)} className="p-2 rounded-xl text-white" style={{ background: rascunho.corPrimaria }}>
-                  <Palette size={18} />
-                </button>
-                <button onClick={(e) => { e.stopPropagation(); setPainelNotificacoesAberto(!painelNotificacoesAberto); }} className="relative p-2 text-slate-500 bg-slate-50 rounded-xl">
-                  <Bell size={20} />
-                  {naoLidas > 0 && <span className="absolute top-1.5 right-1.5 w-2 h-2 bg-red-500 rounded-full"/>}
-                </button>
-                <button onClick={() => setModalLogoutAberto(true)} className="p-2 text-red-500 bg-red-50 rounded-xl border border-red-100">
-                  <LogOut size={20} />
-                </button>
+
+              {/* Barra de busca + ações desktop */}
+              <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2 sm:gap-3 mt-3 md:mt-4">
+                {/* Busca — ocupa toda a largura em mobile */}
+                <div className="relative flex-1">
+                  <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400" size={16} />
+                  <input
+                    type="text"
+                    placeholder="Pesquisa rápida..."
+                    value={termoBusca}
+                    onChange={(e) => setTermoBusca(e.target.value)}
+                    className="w-full pl-10 pr-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl outline-none text-sm transition-all focus:border-blue-300 focus:ring-2 focus:ring-blue-100"
+                  />
+                </div>
+
+                {/* Botões desktop */}
+                <div className="hidden md:flex items-center gap-2">
+                  <button onClick={() => setPainelAberto(true)}
+                    className="flex items-center gap-1.5 px-3 py-2.5 text-white text-xs font-bold rounded-xl shadow-md active:scale-95 whitespace-nowrap"
+                    style={{ background: `linear-gradient(135deg, ${rascunho.corPrimaria}, ${rascunho.corSecundaria})` }}
+                  >
+                    <Palette size={14} /> Personalize
+                  </button>
+                  <button onClick={() => setModalInstrucoes(true)}
+                    className="flex items-center gap-1.5 px-3 py-2.5 bg-gradient-to-r from-emerald-500 to-emerald-600 text-white text-xs font-bold rounded-xl shadow-md active:scale-95 whitespace-nowrap"
+                  >
+                    <HelpCircle size={14} /> Instruções
+                  </button>
+                  <button onClick={(e) => { e.stopPropagation(); setPainelNotificacoesAberto(!painelNotificacoesAberto); }}
+                    className="relative p-2.5 text-slate-500 bg-slate-50 rounded-xl hover:bg-slate-100 transition-colors"
+                  >
+                    <Bell size={18} />
+                    {naoLidas > 0 && <span className="absolute -top-1 -right-1 w-5 h-5 bg-red-500 text-white text-[10px] font-black flex items-center justify-center rounded-full border-2 border-white">{naoLidas > 9 ? '9+' : naoLidas}</span>}
+                  </button>
+                  <button onClick={() => setModalLogoutAberto(true)}
+                    className="flex items-center gap-1.5 px-3 py-2.5 bg-gradient-to-r from-red-500 to-red-600 text-white text-xs font-bold rounded-xl shadow-md active:scale-95 whitespace-nowrap"
+                  >
+                    <LogOut size={14} /> Sair
+                  </button>
+                </div>
               </div>
             </div>
-            <div className="flex items-center gap-2 sm:gap-3 w-full md:w-auto relative">
-              <div className="relative w-full md:w-64 lg:w-80">
-                <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400" size={18} />
-                <input type="text" placeholder="Pesquisa rápida..." value={termoBusca} onChange={(e) => setTermoBusca(e.target.value)} className="w-full pl-11 pr-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl outline-none text-sm"/>
-              </div>
-              <div className="hidden md:flex items-center gap-2 lg:gap-3">
-                <button onClick={() => setPainelAberto(true)} className="flex items-center gap-2 px-3 lg:px-4 py-2.5 text-white text-sm font-bold rounded-xl shadow-lg active:scale-95 whitespace-nowrap"
-                  style={{ background: `linear-gradient(135deg, ${rascunho.corPrimaria}, ${rascunho.corSecundaria})` }}
-                >
-                  <Palette size={16} /> <span className="hidden lg:inline">Personalize</span>
-                </button>
-                <button onClick={() => setModalInstrucoes(true)} className="flex items-center gap-2 px-3 lg:px-4 py-2.5 bg-gradient-to-r from-emerald-500 to-emerald-600 text-white text-sm font-bold rounded-xl shadow-lg active:scale-95 whitespace-nowrap">
-                  <HelpCircle size={18} /> <span className="hidden lg:inline">Instruções</span>
-                </button>
-                <button onClick={(e) => { e.stopPropagation(); setPainelNotificacoesAberto(!painelNotificacoesAberto); }} className="relative p-2.5 text-slate-500 bg-slate-50 rounded-xl">
-                  <Bell size={20} />
-                  {naoLidas > 0 && <span className="absolute -top-1 -right-1 w-5 h-5 bg-red-500 text-white text-[10px] font-black flex items-center justify-center rounded-full border-2 border-white">{naoLidas > 9 ? '9+' : naoLidas}</span>}
-                </button>
-                <button onClick={() => setModalLogoutAberto(true)} className="flex items-center gap-2 px-3 lg:px-4 py-2.5 bg-gradient-to-r from-red-500 to-red-600 text-white text-sm font-bold rounded-xl shadow-lg active:scale-95 shrink-0">
-                  <LogOut size={18} /> <span className="hidden lg:inline">Sair</span>
-                </button>
-              </div>
-              {painelNotificacoesAberto && (
-                <div onClick={(e) => e.stopPropagation()} className="absolute top-full right-0 mt-3 w-[calc(100vw-2rem)] sm:w-96 bg-white rounded-3xl shadow-2xl border border-slate-100 z-50 overflow-hidden animate-in fade-in slide-in-from-top-4">
-                  <div className="p-4 border-b border-slate-100 bg-slate-50/80 flex justify-between items-center">
-                    <h4 className="font-extrabold text-slate-800 flex items-center gap-2"><Bell size={16} className="text-slate-400"/> Notificações</h4>
-                    {naoLidas > 0 && <span className="text-[10px] font-black text-red-600 bg-red-100 px-2 py-1 rounded-lg uppercase">{naoLidas} Novas</span>}
-                  </div>
-                  <div className="max-h-[350px] overflow-y-auto p-2">
-                    {notificacoes.length === 0 ? (
-                      <div className="text-center py-8 text-slate-400"><Bell size={24} className="mx-auto mb-2 opacity-20"/><p className="text-sm">Nenhum aviso novo.</p></div>
-                    ) : (
-                      <div className="space-y-1">
-                        {notificacoes.map(n => (
-                          <div key={n.id} onClick={(e) => lerNotificacao(n, e)} className={`p-4 rounded-2xl cursor-pointer transition-all relative overflow-hidden ${n.lida ? 'hover:bg-slate-50' : 'bg-slate-50'}`}>
-                            {!n.lida && <div className="absolute left-0 top-0 bottom-0 w-1 rounded-l-2xl" style={{ background: rascunho.corPrimaria }}/>}
-                            <h5 className={`text-sm mb-1 ${n.lida ? 'font-bold text-slate-600' : 'font-extrabold text-slate-900'}`}>{n.titulo}</h5>
-                            <p className={`text-xs ${n.lida ? 'text-slate-400' : 'text-slate-600'}`}>{n.mensagem}</p>
-                            <div className="flex items-center justify-between mt-2">
-                              <span className="text-[10px] text-slate-400 font-bold">{new Date(n.criado_em).toLocaleDateString('pt-BR')}</span>
-                              {n.comunicado_id && <span className="text-[10px] font-bold px-2 py-0.5 rounded" style={{ color: rascunho.corPrimaria, background: rascunho.corPrimaria + '15' }}>Ler Agora →</span>}
-                            </div>
+
+            {/* Painel de notificações — posicionado abaixo do header */}
+            {painelNotificacoesAberto && (
+              <div onClick={(e) => e.stopPropagation()}
+                className="absolute top-full right-3 sm:right-5 mt-2 w-[calc(100vw-2rem)] sm:w-96 bg-white rounded-2xl shadow-2xl border border-slate-100 z-50 overflow-hidden animate-in fade-in slide-in-from-top-4"
+              >
+                <div className="p-3 sm:p-4 border-b border-slate-100 bg-slate-50/80 flex justify-between items-center">
+                  <h4 className="font-extrabold text-slate-800 flex items-center gap-2 text-sm"><Bell size={14} className="text-slate-400"/> Notificações</h4>
+                  {naoLidas > 0 && <span className="text-[10px] font-black text-red-600 bg-red-100 px-2 py-0.5 rounded-lg uppercase">{naoLidas} Novas</span>}
+                </div>
+                <div className="max-h-[300px] sm:max-h-[350px] overflow-y-auto p-2">
+                  {notificacoes.length === 0 ? (
+                    <div className="text-center py-6 text-slate-400"><Bell size={20} className="mx-auto mb-2 opacity-20"/><p className="text-xs">Nenhum aviso novo.</p></div>
+                  ) : (
+                    <div className="space-y-1">
+                      {notificacoes.map(n => (
+                        <div key={n.id} onClick={(e) => lerNotificacao(n, e)} className={`p-3 rounded-xl cursor-pointer transition-all relative overflow-hidden ${n.lida ? 'hover:bg-slate-50' : 'bg-slate-50'}`}>
+                          {!n.lida && <div className="absolute left-0 top-0 bottom-0 w-1 rounded-l-xl" style={{ background: rascunho.corPrimaria }}/>}
+                          <h5 className={`text-xs mb-0.5 ${n.lida ? 'font-bold text-slate-600' : 'font-extrabold text-slate-900'}`}>{n.titulo}</h5>
+                          <p className={`text-[11px] ${n.lida ? 'text-slate-400' : 'text-slate-600'}`}>{n.mensagem}</p>
+                          <div className="flex items-center justify-between mt-1.5">
+                            <span className="text-[10px] text-slate-400 font-bold">{new Date(n.criado_em).toLocaleDateString('pt-BR')}</span>
+                            {n.comunicado_id && <span className="text-[10px] font-bold px-1.5 py-0.5 rounded" style={{ color: rascunho.corPrimaria, background: rascunho.corPrimaria + '15' }}>Ler →</span>}
                           </div>
-                        ))}
-                      </div>
-                    )}
-                  </div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
                 </div>
-              )}
-            </div>
+              </div>
+            )}
           </header>
         )}
 
@@ -623,11 +677,13 @@ export default function DashboardAtendente() {
               <LayoutComunicados
                 layout={rascunho.layout}
                 modeFoco={rascunho.modeFoco}
+                organizacao={rascunho.organizacao}
                 comunicados={comunicadosFiltrados}
                 usuarioId={usuarioId}
                 onAbrir={registrarLeitura}
                 onCurtir={toggleCurtida}
                 cor={rascunho.corPrimaria}
+                pastasHook={pastasHook}
               />
             )}
 
@@ -655,7 +711,7 @@ export default function DashboardAtendente() {
                     <div className="space-y-4">
                       <input type="text" placeholder="Título (ex: Saudação de Bom Dia)" value={tituloScript} onChange={e => setTituloScript(e.target.value)} className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-[#00A859] outline-none font-bold" required/>
                       <div className="border border-slate-200 rounded-xl bg-white overflow-hidden">
-                        <ReactQuill theme="snow" value={conteudoScript} onChange={setConteudoScript} modules={modulosQuillSimples} className="min-h-[150px]"/>
+                        <ReactQuill theme="snow" value={conteudoScript} onChange={setConteudoScript} modules={modulosQuillScriptComVideo} className="min-h-[150px]"/>
                       </div>
                       
                       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -672,6 +728,13 @@ export default function DashboardAtendente() {
                         </label>
                       </div>
 
+                      <UploadMidia
+                        midias={midiasScript}
+                        onChange={setMidiasScript}
+                        corPrimaria={rascunho.corPrimaria}
+                        compact={true}
+                      />
+
                       <button type="submit"
                         className={`w-full py-4 text-white font-bold rounded-xl transition-all shadow-lg hover:shadow-xl active:scale-[0.98] ${idEmEdicaoScript ? 'bg-gradient-to-r from-orange-500 to-orange-600 hover:from-orange-600 hover:to-orange-700 shadow-orange-200' : ''}`}
                         style={!idEmEdicaoScript ? { background: `linear-gradient(135deg, ${rascunho.corPrimaria}, ${rascunho.corSecundaria})` } : {}}
@@ -682,91 +745,39 @@ export default function DashboardAtendente() {
                   </form>
                 )}
 
-                <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 tv:grid-cols-4 gap-3 sm:gap-4 tv:gap-6">
-                  {meusScripts.length === 0 && !formScriptAberto ? <p className="text-slate-400 col-span-full text-center py-10">Nenhum script na sua tela no momento.</p> : 
-                    meusScripts.map(script => (
-                      <div key={script.id} onClick={() => setScriptVisualizado(script)} className="bg-white p-6 rounded-3xl border border-slate-200 flex flex-col h-full shadow-sm hover:shadow-md transition-all cursor-pointer group">
-                        <div className="flex justify-between items-start mb-4">
-                          <h4 className="font-extrabold text-slate-800 group-hover:transition-colors" style={{ color: undefined }}
-                            onMouseEnter={e => e.currentTarget.style.color = rascunho.corPrimaria}
-                            onMouseLeave={e => e.currentTarget.style.color = ''}
-                          >{script.titulo}</h4>
-                          <span title={script.visivel_equipe ? "Público" : "Privado"}
-                            className="p-1.5 rounded-lg"
-                            style={script.visivel_equipe ? { background: rascunho.corPrimaria + '15', color: rascunho.corPrimaria } : { background: '#f1f5f9', color: '#94a3b8' }}
-                          >
-                            {script.visivel_equipe ? <Globe size={14}/> : <Lock size={14}/>}
-                          </span>
-                        </div>
-                        
-                        {script.anexos_scripts?.length > 0 && (
-                          <span className="text-[10px] bg-slate-100 text-slate-500 px-2 py-1 rounded w-fit mb-3 flex items-center gap-1 font-bold">
-                            <Paperclip size={10}/> {script.anexos_scripts.length} anexo(s)
-                          </span>
-                        )}
-
-                        <div className="flex-1 mb-6 text-sm text-slate-600 line-clamp-2" dangerouslySetInnerHTML={{__html: decodificarHTML(script.conteudo)}} />
-                        
-                        <div className="flex items-center gap-2 mt-auto pt-4 border-t border-slate-100">
-                          <button onClick={(e) => copiarParaAreaTransferencia(decodificarHTML(script.conteudo), script.titulo, e)}
-                            className="flex-1 flex items-center justify-center gap-2 text-white font-bold py-2.5 rounded-xl transition-all active:scale-95"
-                            style={{ background: `linear-gradient(135deg, ${rascunho.corPrimaria}, ${rascunho.corSecundaria})` }}
-                          >
-                            <Copy size={16}/> Copiar
-                          </button>
-                          <button onClick={(e) => abrirParaEdicao(script, e)} className="p-2.5 bg-orange-50 hover:bg-gradient-to-r hover:from-orange-500 hover:to-orange-600 text-orange-600 hover:text-white rounded-xl transition-all shadow-sm hover:shadow-md hover:shadow-orange-200 active:scale-95">
-                            <Edit2 size={16}/>
-                          </button>
-                          <button onClick={(e) => deletarScript(script.id, e)} className="p-2.5 bg-red-50 hover:bg-gradient-to-r hover:from-red-500 hover:to-red-600 text-red-500 hover:text-white rounded-xl transition-all shadow-sm hover:shadow-md hover:shadow-red-200 active:scale-95">
-                            <Trash2 size={16}/>
-                          </button>
-                        </div>
-                      </div>
-                    ))
-                  }
-                </div>
+                {meusScripts.length === 0 && !formScriptAberto ? (
+                  <p className="text-slate-400 col-span-full text-center py-10">Nenhum script na sua tela no momento.</p>
+                ) : (
+                  <LayoutScripts
+                    layout={rascunho.layout}
+                    scripts={meusScripts}
+                    tipo="meus"
+                    cor={rascunho.corPrimaria}
+                    onAbrir={setScriptVisualizado}
+                    onCopiar={(html, titulo, e) => copiarParaAreaTransferencia(html, titulo, e)}
+                    onEditar={abrirParaEdicao}
+                    onDeletar={deletarScript}
+                    decodificarHTML={decodificarHTML}
+                  />
+                )}
               </div>
             )}
 
             {abaAtiva === 'comunidade' && (
-              <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 tv:grid-cols-4 gap-3 sm:gap-4 tv:gap-6">
-                {scriptsEquipe.length === 0 ? <p className="text-slate-400 col-span-full text-center py-10">A equipe ainda não compartilhou nenhum script.</p> : 
-                  scriptsEquipe.map(script => (
-                    <div key={script.id} onClick={() => setScriptVisualizado(script)}
-                      className="bg-white p-6 rounded-3xl flex flex-col h-full shadow-sm hover:shadow-md transition-all relative overflow-hidden cursor-pointer group border"
-                      style={{ borderColor: rascunho.corPrimaria + '30' }}
-                    >
-                      <div className="absolute top-0 right-0 text-[10px] font-black px-3 py-1 rounded-bl-xl uppercase tracking-widest"
-                        style={{ background: rascunho.corPrimaria + '15', color: rascunho.corSecundaria }}
-                      >Da Equipe</div>
-                      <h4 className="font-extrabold pr-16 mb-1 transition-colors"
-                        style={{ color: rascunho.corTexto }}
-                        onMouseEnter={e => e.currentTarget.style.color = rascunho.corPrimaria}
-                        onMouseLeave={e => e.currentTarget.style.color = rascunho.corTexto}
-                      >{script.titulo}</h4>
-                      <p className="text-xs font-medium text-slate-400 mb-2 flex items-center gap-1">Criado por: <strong className="text-slate-600">{script.usuarios?.nome_completo || 'Desconhecido'}</strong></p>
-                      
-                      {script.anexos_scripts?.length > 0 && (
-                          <span className="text-[10px] px-2 py-1 rounded w-fit mb-3 flex items-center gap-1 font-bold"
-                            style={{ background: rascunho.corPrimaria + '10', color: rascunho.corPrimaria }}
-                          >
-                            <Paperclip size={10}/> {script.anexos_scripts.length} anexo(s)
-                          </span>
-                      )}
-
-                      <div className="flex-1 mb-6 text-sm text-slate-600 line-clamp-2" dangerouslySetInnerHTML={{__html: decodificarHTML(script.conteudo)}} />
-                      
-                      <div className="mt-auto pt-4 border-t border-slate-200">
-                        <button onClick={(e) => copiarParaAreaTransferencia(decodificarHTML(script.conteudo), script.titulo, e)}
-                          className="w-full flex items-center justify-center gap-2 text-white font-bold py-2.5 rounded-xl transition-all active:scale-95"
-                          style={{ background: `linear-gradient(135deg, ${rascunho.corPrimaria}, ${rascunho.corSecundaria})` }}
-                        >
-                          <Copy size={16}/> Copiar Texto
-                        </button>
-                      </div>
-                    </div>
-                  ))
-                }
+              <div>
+                {scriptsEquipe.length === 0 ? (
+                  <p className="text-slate-400 text-center py-10">A equipe ainda não compartilhou nenhum script.</p>
+                ) : (
+                  <LayoutScripts
+                    layout={rascunho.layout}
+                    scripts={scriptsEquipe}
+                    tipo="equipe"
+                    cor={rascunho.corPrimaria}
+                    onAbrir={setScriptVisualizado}
+                    onCopiar={(html, titulo, e) => copiarParaAreaTransferencia(html, titulo, e)}
+                    decodificarHTML={decodificarHTML}
+                  />
+                )}
               </div>
             )}
 
@@ -823,9 +834,11 @@ export default function DashboardAtendente() {
             <div className="p-6 md:p-10 overflow-y-auto modal-leitura"
               style={{ background: '#ffffff', color: '#334155' }}
             >
-               <div className="ql-snow">
-                  <div className="ql-editor" style={{ color: '#334155', background: '#ffffff' }} dangerouslySetInnerHTML={{ __html: decodificarHTML(publicacaoVisualizada ? publicacaoVisualizada.conteudo : scriptVisualizado.conteudo) }} />
-               </div>
+               <div 
+                 className="conteudo-publicacao"
+                 style={{ color: '#334155', background: '#ffffff', fontFamily: '-apple-system, BlinkMacSystemFont, Segoe UI, Roboto, sans-serif', fontSize: '14px', lineHeight: '1.7' }}
+                 dangerouslySetInnerHTML={{ __html: publicacaoVisualizada ? (publicacaoVisualizada.conteudo || '') : (scriptVisualizado?.conteudo || '') }} 
+               />
             </div>
 
             {((publicacaoVisualizada?.anexos_comunicados?.length > 0) || (scriptVisualizado?.anexos_scripts?.length > 0)) && (
@@ -1215,6 +1228,13 @@ export default function DashboardAtendente() {
           </div>
         </div>
       )}
+
+      <ModalVideo
+        onInserir={(html) => setConteudoScript(prev => prev + html)}
+        aberto={modalVideoScriptAberto}
+        onFechar={() => setModalVideoScriptAberto(false)}
+        corPrimaria={rascunho.corPrimaria}
+      />
 
       {modalLogoutAberto && (
         <div className="fixed inset-0 z-[200] flex items-center justify-center p-4 sm:p-6 bg-slate-900/60 backdrop-blur-sm animate-in fade-in duration-200" onClick={(e) => e.stopPropagation()}>

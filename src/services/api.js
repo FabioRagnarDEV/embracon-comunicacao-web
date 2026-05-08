@@ -30,17 +30,15 @@ async function apiRequest(endpoint, options = {}) {
     }
 
     try {
-        console.log('🔵 Fazendo requisição para:', `${API_URL}${endpoint}`);
-        console.log('🔵 Config:', config);
-        
         const response = await fetch(`${API_URL}${endpoint}`, config);
-        
-        console.log('🔵 Resposta status:', response.status);
 
         // Tratar erros de autenticação
         if (response.status === 401) {
-            // Token inválido ou expirado - limpar e redirecionar
-            localStorage.clear();
+            // Token inválido ou expirado - limpar dados de autenticação e redirecionar
+            localStorage.removeItem('token');
+            localStorage.removeItem('usuario_id');
+            localStorage.removeItem('usuario_nome');
+            localStorage.removeItem('usuario_perfil');
             window.location.href = '/';
             throw new Error('Sessão expirada. Faça login novamente.');
         }
@@ -58,13 +56,11 @@ async function apiRequest(endpoint, options = {}) {
         // Tratar outros erros
         if (!response.ok) {
             const errorData = await response.json().catch(() => ({}));
-            console.error('🔴 Erro da API:', errorData);
             throw new Error(errorData.erro || 'Erro ao processar requisição.');
         }
 
         return response;
     } catch (error) {
-        console.error('🔴 Erro na requisição:', error);
         throw error;
     }
 }
@@ -94,11 +90,29 @@ export const authService = {
     },
 
     /**
-     * Fazer logout
+     * Fazer logout - notifica o backend e limpa dados locais
      */
-    logout() {
-        localStorage.clear();
-        window.location.href = '/';
+    async logout() {
+        try {
+            const token = localStorage.getItem('token');
+            if (token) {
+                await fetch(`${API_URL}/auth/logout`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Authorization': `Bearer ${token}`
+                    }
+                });
+            }
+        } catch {
+            // Mesmo se falhar, limpar dados locais
+        } finally {
+            localStorage.removeItem('token');
+            localStorage.removeItem('usuario_id');
+            localStorage.removeItem('usuario_nome');
+            localStorage.removeItem('usuario_perfil');
+            window.location.href = '/';
+        }
     },
 
     /**

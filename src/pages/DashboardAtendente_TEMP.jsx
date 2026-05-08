@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
+import DOMPurify from 'dompurify';
 import ReactQuill from 'react-quill-new';
 import { 
   Plus, Search, Edit2, Trash2, X, Save, 
@@ -189,7 +190,14 @@ export default function DashboardMonitoria() {
     if (!html) return '<p class="text-slate-400 italic">Este comunicado não possui texto.</p>';
     const txt = document.createElement('textarea');
     txt.innerHTML = html;
-    return txt.value;
+    const decoded = txt.value;
+    return DOMPurify.sanitize(decoded, {
+      ALLOWED_TAGS: ['p','br','strong','em','u','s','h1','h2','h3','h4','h5','h6','ul','ol','li','a','img','blockquote','code','pre','span','div','iframe','table','thead','tbody','tr','th','td','sub','sup','hr'],
+      ALLOWED_ATTR: ['href','src','alt','title','class','style','target','width','height','allowfullscreen','frameborder','rel','colspan','rowspan'],
+      ALLOW_DATA_ATTR: false,
+      FORBID_TAGS: ['script','object','embed','form','input','textarea','button'],
+      FORBID_ATTR: ['onerror','onload','onclick','onmouseover','onfocus','onblur'],
+    });
   };
 
   const mostrarMensagem = (texto, tipo = 'sucesso') => {

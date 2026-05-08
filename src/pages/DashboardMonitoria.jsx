@@ -1,4 +1,5 @@
 ﻿import { useState, useEffect, useCallback, useRef } from 'react';
+import DOMPurify from 'dompurify';
 import ReactQuill from 'react-quill-new';
 import { 
   Plus, Search, Edit2, Trash2, X, Save, 
@@ -11,6 +12,10 @@ import { comunicadosService, relatoriosService } from '../services/api';
 import backgroundImage from '../assets/telainiciaMonitoria .png';
 import { usePersonalizacao } from '../hooks/usePersonalizacao';
 import PainelPersonalizacao from '../components/PainelPersonalizacao';
+import UploadMidia from '../components/UploadMidia';
+import ModalVideo from '../components/ModalVideo';
+import { usePastas } from '../hooks/usePastas';
+import EditorConteudo from '../components/EditorConteudo';
 
 // Registrar fontes personalizadas no Quill
 const Font = ReactQuill.Quill.import('formats/font');
@@ -34,36 +39,212 @@ Font.whitelist = [
 ];
 ReactQuill.Quill.register(Font, true);
 
-// Configuração do Toolbar com fontes personalizadas
-const modulosQuill = {
-  toolbar: [
-    [{ 'font': [
-      'sans-serif',
-      'serif', 
-      'monospace',
-      'arial',
-      'georgia',
-      'impact',
-      'tahoma',
-      'times-new-roman',
-      'verdana',
-      'roboto',
-      'open-sans',
-      'lato',
-      'montserrat',
-      'poppins',
-      'raleway',
-      'ubuntu'
-    ] }, { 'size': ['small', false, 'large', 'huge'] }],
-    [{ 'header': [1, 2, 3, 4, 5, 6, false] }],
-    ['bold', 'italic', 'underline', 'strike'],
-    [{ 'color': [] }, { 'background': [] }],
-    [{ 'align': [] }],
-    [{ 'list': 'ordered'}, { 'list': 'bullet' }],
-    ['link', 'image'],
-    ['clean']
-  ]
+// ── Registrar formato de imagem com suporte a width/height ──────────────────
+const BaseImage = ReactQuill.Quill.import('formats/image');
+class ResizableImage extends BaseImage {
+  static create(value) {
+    const node = super.create(value);
+    if (typeof value === 'object') {
+      node.setAttribute('src', value.src || value);
+      if (value.width) node.setAttribute('width', value.width);
+      if (value.height) node.setAttribute('height', value.height);
+      if (value.style) node.setAttribute('style', value.style);
+    }
+    return node;
+  }
+
+  static value(node) {
+    return {
+      src: node.getAttribute('src'),
+      width: node.getAttribute('width'),
+      height: node.getAttribute('height'),
+      style: node.getAttribute('style'),
+    };
+  }
+
+  static formats(node) {
+    const formats = {};
+    if (node.hasAttribute('width')) formats.width = node.getAttribute('width');
+    if (node.hasAttribute('height')) formats.height = node.getAttribute('height');
+    if (node.hasAttribute('style')) formats.style = node.getAttribute('style');
+    return formats;
+  }
+
+  format(name, value) {
+    if (name === 'width' || name === 'height' || name === 'style') {
+      if (value) {
+        this.domNode.setAttribute(name, value);
+      } else {
+        this.domNode.removeAttribute(name);
+      }
+    } else {
+      super.format(name, value);
+    }
+  }
+}
+ResizableImage.blotName = 'image';
+ResizableImage.tagName = 'IMG';
+ReactQuill.Quill.register(ResizableImage, true);
+
+// Configuração do Toolbar (mantida para compatibilidade com estilos CSS)
+// eslint-disable-next-line
+const _modulosQuill = {
+  toolbar: {
+    container: [
+      [{ 'font': [
+        'sans-serif',
+        'serif', 
+        'monospace',
+        'arial',
+        'georgia',
+        'impact',
+        'tahoma',
+        'times-new-roman',
+        'verdana',
+        'roboto',
+        'open-sans',
+        'lato',
+        'montserrat',
+        'poppins',
+        'raleway',
+        'ubuntu'
+      ] }, { 'size': ['small', false, 'large', 'huge'] }],
+      [{ 'header': [1, 2, 3, 4, 5, 6, false] }],
+      ['bold', 'italic', 'underline', 'strike'],
+      [{ 'color': [] }, { 'background': [] }],
+      [{ 'align': [] }],
+      [{ 'list': 'ordered'}, { 'list': 'bullet' }],
+      ['link', 'image', 'video'],
+      ['clean']
+    ],
+    handlers: {}
+  },
 };
+
+// ─── Componente de Pastas para Monitoria (com mover/reordenar/editar/excluir) ──
+function PastasMonitoria({ pastasOrganizadas, pastas, cor, criarPasta, renomearPasta, excluirPasta, reordenarPastas, moverParaPasta, reordenarItem, getPastaDoComunicado, onVer, onEditar, onDeletar }) {
+  const [novaPasta, setNovaPasta] = useState('');
+  const [moverItem, setMoverItem] = useState(null);
+  const [editandoPasta, setEditandoPasta] = useState(null);
+  const [nomeEditando, setNomeEditando] = useState('');
+
+  return (
+    <div className="space-y-4">
+      {/* Criar pasta */}
+      <div className="flex items-center gap-2 bg-white rounded-2xl border border-slate-200 p-3 shadow-sm">
+        <span className="text-lg">📁</span>
+        <input type="text" value={novaPasta} onChange={e => setNovaPasta(e.target.value)}
+          onKeyDown={e => { if (e.key === 'Enter' && novaPasta.trim()) { criarPasta(novaPasta.trim()); setNovaPasta(''); } }}
+          placeholder="Nova pasta... (Enter para criar)"
+          className="flex-1 px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-sm outline-none focus:ring-2 transition-all"
+        />
+        <button onClick={() => { if (novaPasta.trim()) { criarPasta(novaPasta.trim()); setNovaPasta(''); } }}
+          disabled={!novaPasta.trim()} className="px-3 py-2 text-xs font-bold text-white rounded-xl disabled:opacity-40" style={{ background: cor }}
+        >+ Criar</button>
+      </div>
+
+      {/* Modal mover */}
+      {moverItem && (
+        <div className="fixed inset-0 z-[400] flex items-center justify-center p-4 bg-black/40 backdrop-blur-sm animate-in fade-in" onClick={() => setMoverItem(null)}>
+          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-sm p-5 animate-in zoom-in-95" onClick={e => e.stopPropagation()}>
+            <h3 className="font-extrabold text-slate-800 mb-1">Mover para pasta</h3>
+            <p className="text-xs text-slate-500 mb-4 truncate">"{moverItem.titulo}"</p>
+            <div className="space-y-1.5 max-h-60 overflow-y-auto">
+              {pastas.map(p => (
+                <button key={p.id} onClick={() => { moverParaPasta(moverItem.id, p.id); setMoverItem(null); }}
+                  className="w-full flex items-center gap-3 px-4 py-3 rounded-xl text-left transition-all hover:bg-slate-50 border border-slate-100"
+                >
+                  <span className="text-lg">📁</span>
+                  <span className="font-bold text-sm text-slate-700 flex-1">{p.nome}</span>
+                  {getPastaDoComunicado(moverItem.id) === p.id && (
+                    <span className="text-xs font-bold px-2 py-0.5 rounded-full text-white" style={{ background: cor }}>Atual</span>
+                  )}
+                </button>
+              ))}
+            </div>
+            <button onClick={() => setMoverItem(null)} className="w-full mt-3 py-2.5 text-sm font-bold text-slate-500 bg-slate-100 rounded-xl">Cancelar</button>
+          </div>
+        </div>
+      )}
+
+      {/* Pastas */}
+      {pastasOrganizadas.map(({ pasta, itens }) => (
+        <details key={pasta.id} className="group bg-white rounded-2xl border border-slate-100 shadow-sm overflow-hidden" open>
+          <summary className="flex items-center gap-3 px-4 sm:px-5 py-3 sm:py-4 cursor-pointer select-none hover:bg-slate-50 transition-colors list-none">
+            {pasta.id !== '__geral__' && (
+              <div className="flex flex-col gap-0.5 shrink-0">
+                <button onClick={(e) => { e.preventDefault(); reordenarPastas(pasta.id, 'up'); }} className="text-slate-300 hover:text-slate-600 p-0.5">
+                  <svg width="10" height="10" viewBox="0 0 24 24" fill="currentColor"><path d="M12 4l-8 8h16z"/></svg>
+                </button>
+                <button onClick={(e) => { e.preventDefault(); reordenarPastas(pasta.id, 'down'); }} className="text-slate-300 hover:text-slate-600 p-0.5">
+                  <svg width="10" height="10" viewBox="0 0 24 24" fill="currentColor"><path d="M12 20l8-8H4z"/></svg>
+                </button>
+              </div>
+            )}
+            <span className="text-lg shrink-0">📁</span>
+            {editandoPasta === pasta.id ? (
+              <input autoFocus value={nomeEditando} onChange={e => setNomeEditando(e.target.value)}
+                onBlur={() => { if (nomeEditando.trim()) renomearPasta(pasta.id, nomeEditando.trim()); setEditandoPasta(null); }}
+                onKeyDown={e => { if (e.key === 'Enter') { if (nomeEditando.trim()) renomearPasta(pasta.id, nomeEditando.trim()); setEditandoPasta(null); } }}
+                className="flex-1 px-2 py-1 text-sm font-bold bg-slate-50 border border-slate-200 rounded-lg outline-none"
+                onClick={e => e.preventDefault()}
+              />
+            ) : (
+              <span className="font-extrabold text-slate-800 flex-1 min-w-0 truncate">{pasta.nome}</span>
+            )}
+            <span className="text-xs font-black px-2 py-0.5 rounded-full text-white shrink-0" style={{ background: cor }}>{itens.length}</span>
+            {pasta.id !== '__geral__' && (
+              <div className="flex items-center gap-1 shrink-0">
+                <button onClick={(e) => { e.preventDefault(); setEditandoPasta(pasta.id); setNomeEditando(pasta.nome); }} className="p-1 text-slate-400 hover:text-blue-500 rounded" title="Renomear">
+                  <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><path d="M11 4H4a2 2 0 00-2 2v14a2 2 0 002 2h14a2 2 0 002-2v-7M18.5 2.5a2.121 2.121 0 013 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
+                </button>
+                <button onClick={(e) => { e.preventDefault(); if (window.confirm(`Excluir pasta "${pasta.nome}"?`)) excluirPasta(pasta.id); }} className="p-1 text-slate-400 hover:text-red-500 rounded" title="Excluir">
+                  <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 01-2 2H7a2 2 0 01-2-2V6m3 0V4a2 2 0 012-2h4a2 2 0 012 2v2"/></svg>
+                </button>
+              </div>
+            )}
+            <svg className="w-4 h-4 text-slate-400 transition-transform group-open:rotate-180 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+              <path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" />
+            </svg>
+          </summary>
+          <div className="divide-y divide-slate-50 border-t border-slate-100">
+            {itens.length === 0 ? (
+              <p className="text-center text-xs text-slate-400 py-6 italic">Pasta vazia</p>
+            ) : itens.map((c, i) => (
+              <div key={c.id} className="flex items-center gap-2 px-4 sm:px-5 py-3 hover:bg-slate-50 transition-colors group">
+                <div className="flex flex-col gap-0.5 shrink-0 opacity-0 group-hover:opacity-100 transition-opacity">
+                  <button onClick={() => reordenarItem(pasta.id, c.id, 'up', itens.map(x => x.id))} className="text-slate-300 hover:text-slate-600 p-0.5">
+                    <svg width="9" height="9" viewBox="0 0 24 24" fill="currentColor"><path d="M12 4l-8 8h16z"/></svg>
+                  </button>
+                  <button onClick={() => reordenarItem(pasta.id, c.id, 'down', itens.map(x => x.id))} className="text-slate-300 hover:text-slate-600 p-0.5">
+                    <svg width="9" height="9" viewBox="0 0 24 24" fill="currentColor"><path d="M12 20l8-8H4z"/></svg>
+                  </button>
+                </div>
+                <span className="text-xs font-black text-slate-300 w-4 text-right shrink-0">{i + 1}</span>
+                <div className="w-0.5 h-4 rounded-full shrink-0" style={{ background: cor + '60' }} />
+                <div className="flex-1 min-w-0">
+                  <p className="font-semibold text-sm text-slate-800 truncate">{c.titulo}</p>
+                  <div className="flex items-center gap-2 mt-0.5">
+                    <span className="text-[10px] text-slate-400">{new Date(c.criado_em).toLocaleDateString('pt-BR')}</span>
+                    <span className="text-[10px] text-red-400 flex items-center gap-0.5"><Heart size={9} className="fill-current"/> {c.curtidas_comunicados?.length || 0}</span>
+                  </div>
+                </div>
+                <div className="flex items-center gap-1 shrink-0">
+                  <button onClick={() => setMoverItem({ id: c.id, titulo: c.titulo })} className="p-1.5 text-slate-400 hover:text-blue-500 bg-slate-50 rounded-lg" title="Mover">
+                    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><path d="M22 19a2 2 0 01-2 2H4a2 2 0 01-2-2V5a2 2 0 012-2h5l2 3h9a2 2 0 012 2z"/></svg>
+                  </button>
+                  <button onClick={() => onVer(c)} className="px-2 py-1.5 text-xs font-bold text-white rounded-lg" style={{ background: cor }}>Ver</button>
+                  <button onClick={() => onEditar(c)} className="p-1.5 text-orange-500 bg-orange-50 rounded-lg hover:bg-orange-100"><Edit2 size={12}/></button>
+                  <button onClick={() => onDeletar(c.id)} className="p-1.5 text-red-500 bg-red-50 rounded-lg hover:bg-red-100"><Trash2 size={12}/></button>
+                </div>
+              </div>
+            ))}
+          </div>
+        </details>
+      ))}
+    </div>
+  );
+}
 
 export default function DashboardMonitoria() {
   const personalizacao = usePersonalizacao('monitoria');
@@ -71,11 +252,24 @@ export default function DashboardMonitoria() {
 
   const [abaAtiva, setAbaAtiva] = useState('comunicados');
 
+  // Layout ativo — igual ao Atendente, muda toda a estrutura visual
+  const layoutAtual = rascunho.modeFoco ? 'foco' : (rascunho.layout || 'cards');
+  const pastasHook = usePastas();
+
+  // Estado do modal de vídeo e editor visual
+  const [modalVideoAberto, setModalVideoAberto] = useState(false);
+  const [editorVisualAberto, setEditorVisualAberto] = useState(false);
+  const [previewAberto, setPreviewAberto] = useState(false);
+  const editorFileRef = useRef(null);
+
   const [titulo, setTitulo] = useState('');
   const [conteudo, setConteudo] = useState('');
   const [tags, setTags] = useState('');
+  const [categoria, setCategoria] = useState('');
+  const [dicas, setDicas] = useState([{ tipo: 'atencao', texto: '' }]); // dicas de atenção
   const [arquivos, setArquivos] = useState(null);
   const [idEmEdicao, setIdEmEdicao] = useState(null);
+  const [midias, setMidias] = useState([]);
   
   const [mensagem, setMensagem] = useState({ tipo: '', texto: '' });
   const [carregando, setCarregando] = useState(false);
@@ -194,7 +388,15 @@ export default function DashboardMonitoria() {
     if (!html) return '<p class="text-slate-400 italic">Este comunicado não possui texto.</p>';
     const txt = document.createElement('textarea');
     txt.innerHTML = html;
-    return txt.value;
+    const decoded = txt.value;
+    // Sanitizar com DOMPurify para prevenir XSS
+    return DOMPurify.sanitize(decoded, {
+      ALLOWED_TAGS: ['p','br','strong','em','u','s','h1','h2','h3','h4','h5','h6','ul','ol','li','a','img','blockquote','code','pre','span','div','iframe','table','thead','tbody','tr','th','td','sub','sup','hr'],
+      ALLOWED_ATTR: ['href','src','alt','title','class','style','target','width','height','allowfullscreen','frameborder','rel','colspan','rowspan'],
+      ALLOW_DATA_ATTR: false,
+      FORBID_TAGS: ['script','object','embed','form','input','textarea','button'],
+      FORBID_ATTR: ['onerror','onload','onclick','onmouseover','onfocus','onblur'],
+    });
   };
 
   const mostrarMensagem = (texto, tipo = 'sucesso') => {
@@ -238,7 +440,10 @@ export default function DashboardMonitoria() {
     setTitulo('');
     setConteudo('');
     setTags('');
+    setCategoria('');
+    setDicas([{ tipo: 'atencao', texto: '' }]);
     setArquivos(null);
+    setMidias([]);
     setIdEmEdicao(null);
     if (fileInputRef.current) fileInputRef.current.value = "";
   };
@@ -250,12 +455,52 @@ export default function DashboardMonitoria() {
     try {
       const formData = new FormData();
       formData.append('titulo', titulo);
-      formData.append('conteudo', conteudo);
       formData.append('tags', tags);
+
+      // Montar conteúdo final com dicas de atenção embutidas
+      const dicasValidas = dicas.filter(d => d.texto.trim());
+      let conteudoFinal = conteudo;
+
+      if (dicasValidas.length > 0) {
+        const CORES_DICA = {
+          atencao:  { bg: '#fffbeb', borda: '#f59e0b', icone: '⚠️', titulo: 'Atenção' },
+          importante: { bg: '#fef2f2', borda: '#ef4444', icone: '🚨', titulo: 'Importante' },
+          info:     { bg: '#eff6ff', borda: '#3b82f6', icone: 'ℹ️', titulo: 'Informação' },
+          dica:     { bg: '#f0fdf4', borda: '#22c55e', icone: '💡', titulo: 'Dica' },
+        };
+        const dicasHTML = dicasValidas.map(d => {
+          const c = CORES_DICA[d.tipo] || CORES_DICA.atencao;
+          return `<div style="background:${c.bg};border-left:4px solid ${c.borda};border-radius:8px;padding:12px 16px;margin:12px 0;display:flex;gap:10px;align-items:flex-start;">
+            <span style="font-size:18px;line-height:1.4;">${c.icone}</span>
+            <div><strong style="color:#1e293b;font-size:13px;">${c.titulo}:</strong><p style="margin:4px 0 0;color:#334155;font-size:13px;line-height:1.6;">${d.texto}</p></div>
+          </div>`;
+        }).join('');
+        conteudoFinal = dicasHTML + conteudo;
+      }
+
+      // YouTube links
+      const youtubeLinks = midias.filter(m => m.tipo === 'youtube');
+      if (youtubeLinks.length > 0) {
+        const iframes = youtubeLinks.map(m =>
+          `<div style="position:relative;padding-bottom:56.25%;height:0;overflow:hidden;margin:16px 0;border-radius:12px;"><iframe src="https://www.youtube.com/embed/${m.youtubeId}" style="position:absolute;top:0;left:0;width:100%;height:100%;border:0;border-radius:12px;" allowfullscreen></iframe></div>`
+        ).join('');
+        conteudoFinal = conteudoFinal + iframes;
+      }
+
+      formData.append('conteudo', conteudoFinal);
+
+      // Categoria como tag especial (prefixo "cat:")
+      const tagsFinais = categoria.trim()
+        ? `${tags}${tags ? ', ' : ''}cat:${categoria.trim()}`
+        : tags;
+      formData.set('tags', tagsFinais);
 
       if (arquivos) {
         Array.from(arquivos).forEach(arq => formData.append('arquivos', arq));
       }
+      midias.filter(m => m.tipo === 'arquivo' && m.arquivo).forEach(m => {
+        formData.append('arquivos', m.arquivo);
+      });
 
       if (idEmEdicao) {
         await comunicadosService.atualizar(idEmEdicao, formData);
@@ -472,6 +717,31 @@ export default function DashboardMonitoria() {
         .ql-container.ql-snow {
           border: none !important;
         }
+
+        /* ── IMAGENS REDIMENSIONÁVEIS NO EDITOR ── */
+        .form-editor .ql-editor img {
+          cursor: nwse-resize !important;
+          resize: both !important;
+          overflow: hidden !important;
+          display: inline-block !important;
+          max-width: 100% !important;
+          border: 2px solid transparent !important;
+          border-radius: 8px !important;
+          transition: border-color 0.2s, box-shadow 0.2s !important;
+          min-width: 50px !important;
+          min-height: 50px !important;
+        }
+        .form-editor .ql-editor img:hover {
+          border-color: #3b82f6 !important;
+          box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.15) !important;
+        }
+        .form-editor .ql-editor img:active,
+        .form-editor .ql-editor img:focus {
+          border-color: #1d4ed8 !important;
+          box-shadow: 0 0 0 4px rgba(29, 78, 216, 0.2) !important;
+          outline: 2px dashed #3b82f6 !important;
+          outline-offset: 3px !important;
+        }
         
         /* Estilos completos para leitura de conteúdo formatado */
         .modal-leitura .ql-editor {
@@ -557,14 +827,14 @@ export default function DashboardMonitoria() {
           margin-bottom: 0.5em !important; 
         }
         
-        /* Imagens */
+        /* Imagens — respeita o tamanho definido na edição */
         .modal-leitura .ql-editor img {
           max-width: 100%;
-          height: auto;
           border-radius: 8px;
-          margin: 1.5em auto;
+          margin: 1em auto;
           display: block;
           box-shadow: 0 4px 6px -1px rgb(0 0 0 / 0.1);
+          object-fit: contain;
         }
         
         /* Citações */
@@ -717,14 +987,108 @@ export default function DashboardMonitoria() {
 
                   <div className="space-y-1">
                     <label className="text-xs font-bold text-slate-500 uppercase tracking-wider ml-1">Conteúdo</label>
-                    <div className="form-editor rounded-2xl border border-slate-200 overflow-hidden focus-within:ring-4 focus-within:ring-[#00A859]/10 transition-all bg-white shadow-sm">
-                      <ReactQuill 
-                        theme="snow" 
-                        value={conteudo} 
-                        onChange={setConteudo} 
-                        modules={modulosQuill} 
+                    <div className="rounded-2xl border border-slate-200 overflow-hidden transition-all bg-white shadow-sm">
+                      <EditorConteudo
+                        value={conteudo}
+                        onChange={setConteudo}
+                        height={450}
+                        onVideoClick={() => setModalVideoAberto(true)}
                       />
                     </div>
+
+                    {/* Botão para inserir dica/destaque no conteúdo */}
+                    <div className="flex flex-wrap items-center gap-2 mt-2">
+                      <button
+                        type="button"
+                        onClick={() => {
+                          const tipoSelecionado = prompt('Tipo de dica:\n1 - ⚠️ Atenção\n2 - 🚨 Importante\n3 - ℹ️ Informação\n4 - 💡 Dica\n\nDigite o número:');
+                          const texto = prompt('Texto da dica:');
+                          if (!texto?.trim()) return;
+                          const tipos = {
+                            '1': { bg: '#fffbeb', borda: '#f59e0b', icone: '⚠️', titulo: 'Atenção' },
+                            '2': { bg: '#fef2f2', borda: '#ef4444', icone: '🚨', titulo: 'Importante' },
+                            '3': { bg: '#eff6ff', borda: '#3b82f6', icone: 'ℹ️', titulo: 'Informação' },
+                            '4': { bg: '#f0fdf4', borda: '#22c55e', icone: '💡', titulo: 'Dica' },
+                          };
+                          const t = tipos[tipoSelecionado] || tipos['1'];
+                          const dicaHtml = `<div style="background:${t.bg};border-left:4px solid ${t.borda};border-radius:8px;padding:12px 16px;margin:12px 0;display:flex;gap:10px;align-items:flex-start;"><span style="font-size:18px;line-height:1.4;">${t.icone}</span><div><strong style="color:#1e293b;font-size:13px;">${t.titulo}:</strong><p style="margin:4px 0 0;color:#334155;font-size:13px;line-height:1.6;">${texto.trim()}</p></div></div>`;
+                          setConteudo(prev => prev + dicaHtml);
+                          mostrarMensagem(`Dica "${t.titulo}" inserida no conteúdo!`);
+                        }}
+                        className="flex items-center gap-1.5 px-3 py-2 text-xs font-bold rounded-xl transition-all active:scale-95 border"
+                        style={{ borderColor: '#f59e0b60', background: '#fffbeb', color: '#92400e' }}
+                      >
+                        💡 Inserir dica/destaque
+                      </button>
+                    </div>
+
+                    {/* Botão para abrir/fechar o editor visual inline */}
+                    <div className="flex items-center gap-2 mt-2">
+                      <button
+                        type="button"
+                        onClick={() => setEditorVisualAberto(v => !v)}
+                        className="flex items-center gap-2 px-4 py-2 text-sm font-bold rounded-xl transition-all active:scale-95"
+                        style={{
+                          background: editorVisualAberto ? rascunho.corPrimaria : rascunho.corPrimaria + '15',
+                          color: editorVisualAberto ? '#fff' : rascunho.corPrimaria,
+                        }}
+                      >
+                        🎨 {editorVisualAberto ? 'Fechar Editor Visual' : 'Abrir Editor Visual (Polotno)'}
+                      </button>
+                      {editorVisualAberto && (
+                        <span className="text-xs text-slate-500">
+                          Crie o design → Baixe → Faça upload abaixo → A imagem vai direto para o conteúdo
+                        </span>
+                      )}
+                    </div>
+
+                    {/* Editor Polotno inline + upload direto para o conteúdo */}
+                    {editorVisualAberto && (
+                      <div className="mt-3 space-y-3 animate-in fade-in slide-in-from-top-4 duration-300">
+                        {/* Upload da imagem do design → insere no conteúdo */}
+                        <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2 p-3 bg-emerald-50 border border-emerald-200 rounded-2xl">
+                          <button
+                            type="button"
+                            onClick={() => editorFileRef.current?.click()}
+                            className="flex items-center justify-center gap-2 px-4 py-2.5 text-sm font-bold rounded-xl transition-all active:scale-95"
+                            style={{ background: rascunho.corPrimaria, color: '#fff' }}
+                          >
+                            ⬆️ Upload da imagem do design (insere no conteúdo)
+                          </button>
+                          <input
+                            ref={editorFileRef}
+                            type="file"
+                            accept="image/*"
+                            className="hidden"
+                            onChange={(e) => {
+                              const file = e.target.files?.[0];
+                              if (!file) return;
+                              const reader = new FileReader();
+                              reader.onload = (ev) => {
+                                const imgHtml = `<div style="text-align:center;margin:16px 0;"><img src="${ev.target.result}" alt="Design visual" style="max-width:100%;border-radius:12px;box-shadow:0 4px 20px rgba(0,0,0,0.08);" /></div>`;
+                                setConteudo(prev => prev + imgHtml);
+                                mostrarMensagem('✅ Imagem do design inserida no conteúdo!');
+                              };
+                              reader.readAsDataURL(file);
+                              e.target.value = '';
+                            }}
+                          />
+                          <p className="text-xs text-emerald-700 flex-1">
+                            💡 Baixe o design no Polotno (botão "Baixar" azul) → Depois clique aqui para inserir a imagem direto no comunicado
+                          </p>
+                        </div>
+
+                        {/* Iframe do Polotno */}
+                        <div className="rounded-2xl overflow-hidden border border-slate-200 shadow-lg" style={{ height: '500px' }}>
+                          <iframe
+                            src="https://studio.polotno.com"
+                            className="w-full h-full border-0"
+                            title="Editor Visual Polotno"
+                            allow="clipboard-read; clipboard-write"
+                          />
+                        </div>
+                      </div>
+                    )}
                   </div>
 
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4 sm:gap-6">
@@ -754,9 +1118,42 @@ export default function DashboardMonitoria() {
                       />
                     </div>
                   </div>
+
+                  {/* ── Categoria (visível quando organização = pastas) ── */}
+                  <div className="space-y-1">
+                    <label className="text-xs font-bold text-slate-500 uppercase tracking-wider ml-1 flex items-center gap-2">
+                      📁 Categoria / Pasta
+                      {(rascunho.organizacao || 'livre') !== 'pastas' && (
+                        <span className="text-[10px] font-medium text-slate-400 normal-case">(ative "Pastas" em Personalizar → Layout para organizar por categoria)</span>
+                      )}
+                    </label>
+                    <input
+                      type="text"
+                      value={categoria}
+                      onChange={e => setCategoria(e.target.value)}
+                      placeholder="Ex: Processos, SAC, Crédito, RH..."
+                      className="w-full px-4 py-3 bg-slate-50 border-transparent rounded-2xl focus:bg-white focus:ring-4 focus:ring-[#00A859]/10 focus:border-[#00A859] transition-all outline-none border text-sm"
+                    />
+                  </div>
                 </div>
 
+                <UploadMidia
+                  midias={midias}
+                  onChange={setMidias}
+                  corPrimaria={rascunho.corPrimaria}
+                />
+
                 <div className="flex flex-col sm:flex-row gap-3 pt-4">
+                  {/* Botão Visualizar antes de publicar */}
+                  <button
+                    type="button"
+                    onClick={() => setPreviewAberto(true)}
+                    disabled={!conteudo.trim() && !titulo.trim()}
+                    className="flex items-center justify-center gap-2 bg-blue-50 hover:bg-blue-100 text-blue-700 font-bold py-4 px-6 rounded-2xl transition-all shadow-md hover:shadow-lg active:scale-[0.98] border border-blue-200 disabled:opacity-40"
+                  >
+                    <Eye size={18}/> Visualizar antes de publicar
+                  </button>
+
                   <button 
                     type="submit" 
                     disabled={carregando}
@@ -806,83 +1203,338 @@ export default function DashboardMonitoria() {
                 </div>
               </div>
               
-              <div className="grid gap-4">
-                {comunicadosFiltrados.length === 0 ? (
-                  <div className="text-center py-20 bg-white rounded-3xl border-2 border-dashed border-slate-100">
-                    <div className="bg-slate-50 w-16 h-16 rounded-full flex items-center justify-center mx-auto mb-4">
-                      <FileText className="text-slate-300" size={32} />
-                    </div>
-                    <p className="text-slate-400 font-medium italic">Nenhum registro encontrado para sua busca.</p>
+              {/* ── LISTAGEM ADAPTATIVA POR LAYOUT ── */}
+              {comunicadosFiltrados.length === 0 ? (
+                <div className="text-center py-20 bg-white rounded-3xl border-2 border-dashed border-slate-100">
+                  <div className="bg-slate-50 w-16 h-16 rounded-full flex items-center justify-center mx-auto mb-4">
+                    <FileText className="text-slate-300" size={32} />
                   </div>
-                ) : (
-                  comunicadosFiltrados.map((comunicado) => (
+                  <p className="text-slate-400 font-medium italic">Nenhum registro encontrado para sua busca.</p>
+                </div>
+              ) : (rascunho.organizacao || 'livre') === 'pastas' ? (
+                /* PASTAS — usa o hook usePastas com mover/reordenar */
+                (() => {
+                  const { pastas, criarPasta, renomearPasta, excluirPasta, reordenarPastas, moverParaPasta, reordenarItem, organizarEmPastas, getPastaDoComunicado } = pastasHook;
+                  const pastasOrganizadas = organizarEmPastas(comunicadosFiltrados);
+
+                  return (
+                    <PastasMonitoria
+                      pastasOrganizadas={pastasOrganizadas}
+                      pastas={pastas}
+                      cor={rascunho.corPrimaria}
+                      criarPasta={criarPasta}
+                      renomearPasta={renomearPasta}
+                      excluirPasta={excluirPasta}
+                      reordenarPastas={reordenarPastas}
+                      moverParaPasta={moverParaPasta}
+                      reordenarItem={reordenarItem}
+                      getPastaDoComunicado={getPastaDoComunicado}
+                      onVer={setPublicacaoVisualizada}
+                      onEditar={carregarParaEdicao}
+                      onDeletar={handleDeletarComunicado}
+                    />
+                  );
+                })()
+              ) : layoutAtual === 'lista' ? (
+                /* LISTA — linhas compactas com ações inline */
+                <div className="bg-white rounded-2xl border border-slate-100 overflow-hidden shadow-sm divide-y divide-slate-100">
+                  {comunicadosFiltrados.map(c => (
+                    <div key={c.id} className="flex items-center gap-3 px-4 py-3 hover:bg-slate-50 transition-colors group">
+                      <div className="w-1 self-stretch rounded-full shrink-0" style={{ background: rascunho.corPrimaria }} />
+                      <div className="flex-1 min-w-0">
+                        <p className="font-bold text-sm text-slate-800 truncate">{c.titulo}</p>
+                        <div className="flex items-center gap-2 mt-0.5 text-xs text-slate-400">
+                          <Calendar size={11}/> {new Date(c.criado_em).toLocaleDateString('pt-BR')}
+                          <span className="px-1.5 py-0.5 rounded font-bold" style={{ color: rascunho.corPrimaria, background: rascunho.corPrimaria + '15' }}>{c.tags}</span>
+                          <span className="text-red-400 flex items-center gap-0.5"><Heart size={10} className="fill-current"/> {c.curtidas_comunicados?.length || 0}</span>
+                        </div>
+                      </div>
+                      <div className="flex items-center gap-1.5 shrink-0">
+                        <button onClick={() => setPublicacaoVisualizada(c)} className="px-2.5 py-1.5 text-xs font-bold text-white rounded-lg" style={{ background: rascunho.corPrimaria }}>Ver</button>
+                        <button onClick={() => carregarParaEdicao(c)} className="p-1.5 text-orange-500 bg-orange-50 rounded-lg hover:bg-orange-100 transition-colors"><Edit2 size={13}/></button>
+                        <button onClick={() => handleDeletarComunicado(c.id)} className="p-1.5 text-red-500 bg-red-50 rounded-lg hover:bg-red-100 transition-colors"><Trash2 size={13}/></button>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              ) : layoutAtual === 'kanban' ? (
+                /* KANBAN — colunas por data */
+                <div className="flex gap-4 overflow-x-auto pb-2 hide-scrollbar">
+                  {[
+                    { label: '🆕 Recentes', dias: 3 },
+                    { label: '📅 Esta semana', dias: 7 },
+                    { label: '📦 Anteriores', dias: Infinity },
+                  ].map((col, colIdx) => {
+                    const anterior = [0, 3, 7][colIdx];
+                    const items = comunicadosFiltrados.filter(c => {
+                      const dias = (Date.now() - new Date(c.criado_em)) / 86400000;
+                      return dias >= anterior && dias < col.dias;
+                    });
+                    return (
+                      <div key={col.label} className="shrink-0 w-72">
+                        <div className="flex items-center justify-between mb-3 px-1">
+                          <span className="font-extrabold text-sm text-slate-700">{col.label}</span>
+                          <span className="text-xs font-black px-2 py-0.5 rounded-full text-white" style={{ background: rascunho.corPrimaria }}>{items.length}</span>
+                        </div>
+                        <div className="space-y-2">
+                          {items.length === 0 ? (
+                            <div className="bg-white/50 border-2 border-dashed border-slate-200 rounded-2xl p-6 text-center text-xs text-slate-400">Nenhum item</div>
+                          ) : items.map(c => (
+                            <div key={c.id} className="bg-white rounded-2xl border border-slate-100 p-4 shadow-sm hover:shadow-md transition-all">
+                              <h4 className="font-bold text-sm text-slate-800 mb-2 line-clamp-2">{c.titulo}</h4>
+                              <div className="flex flex-wrap gap-1 mb-3">
+                                <span className="text-[10px] font-bold px-1.5 py-0.5 rounded" style={{ color: rascunho.corPrimaria, background: rascunho.corPrimaria + '15' }}>{c.tags}</span>
+                                <span className="text-[10px] text-red-400 font-bold flex items-center gap-0.5"><Heart size={9} className="fill-current"/> {c.curtidas_comunicados?.length || 0}</span>
+                              </div>
+                              <div className="flex gap-1.5">
+                                <button onClick={() => setPublicacaoVisualizada(c)} className="flex-1 py-1.5 text-[10px] font-bold text-white rounded-lg" style={{ background: rascunho.corPrimaria }}>Ver</button>
+                                <button onClick={() => carregarParaEdicao(c)} className="p-1.5 text-orange-500 bg-orange-50 rounded-lg"><Edit2 size={11}/></button>
+                                <button onClick={() => handleDeletarComunicado(c.id)} className="p-1.5 text-red-500 bg-red-50 rounded-lg"><Trash2 size={11}/></button>
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              ) : layoutAtual === 'compacto' ? (
+                /* COMPACTO — máxima densidade */
+                <div className="bg-white rounded-2xl border border-slate-100 overflow-hidden shadow-sm">
+                  {comunicadosFiltrados.map((c, i) => (
+                    <div key={c.id} className="flex items-center gap-2 px-3 py-2.5 border-b border-slate-50 last:border-0 hover:bg-slate-50 transition-colors">
+                      <span className="text-[10px] font-black text-slate-300 w-5 text-right shrink-0">{i + 1}</span>
+                      <div className="w-0.5 h-4 rounded-full shrink-0" style={{ background: rascunho.corPrimaria }} />
+                      <p className="flex-1 text-sm font-semibold text-slate-700 truncate">{c.titulo}</p>
+                      <span className="text-[10px] text-slate-400 hidden sm:block">{new Date(c.criado_em).toLocaleDateString('pt-BR')}</span>
+                      <span className="text-[10px] text-red-400 flex items-center gap-0.5"><Heart size={9} className="fill-current"/> {c.curtidas_comunicados?.length || 0}</span>
+                      <div className="flex gap-1 shrink-0">
+                        <button onClick={() => setPublicacaoVisualizada(c)} className="px-2 py-1 text-[10px] font-bold text-white rounded-lg" style={{ background: rascunho.corPrimaria }}>Ver</button>
+                        <button onClick={() => carregarParaEdicao(c)} className="p-1 text-orange-500 bg-orange-50 rounded-lg"><Edit2 size={11}/></button>
+                        <button onClick={() => handleDeletarComunicado(c.id)} className="p-1 text-red-500 bg-red-50 rounded-lg"><Trash2 size={11}/></button>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              ) : layoutAtual === 'magazine' ? (
+                /* MAGAZINE — destaque + grade */
+                <div className="space-y-4">
+                  {/* Destaque */}
+                  {comunicadosFiltrados[0] && (() => {
+                    const c = comunicadosFiltrados[0];
+                    return (
+                      <div className="bg-white rounded-3xl border-2 overflow-hidden shadow-lg p-6 sm:p-8 relative" style={{ borderColor: rascunho.corPrimaria }}>
+                        <div className="absolute top-0 left-0 right-0 h-1" style={{ background: `linear-gradient(90deg, ${rascunho.corPrimaria}, ${rascunho.corSecundaria})` }} />
+                        <div className="flex items-start justify-between gap-4 mb-3">
+                          <span className="text-[10px] font-black px-2 py-1 rounded-full text-white" style={{ background: rascunho.corPrimaria }}>⭐ Destaque</span>
+                          <div className="flex gap-2">
+                            <button onClick={() => carregarParaEdicao(c)} className="p-2 text-orange-500 bg-orange-50 rounded-xl hover:bg-orange-100 transition-colors"><Edit2 size={14}/></button>
+                            <button onClick={() => handleDeletarComunicado(c.id)} className="p-2 text-red-500 bg-red-50 rounded-xl hover:bg-red-100 transition-colors"><Trash2 size={14}/></button>
+                          </div>
+                        </div>
+                        <h2 className="text-xl sm:text-2xl font-extrabold text-slate-800 mb-3">{c.titulo}</h2>
+                        <div className="flex flex-wrap gap-2 mb-4">
+                          <span className="text-xs font-bold text-slate-500 flex items-center gap-1"><Calendar size={12}/> {new Date(c.criado_em).toLocaleDateString('pt-BR')}</span>
+                          <span className="text-xs font-bold px-2 py-0.5 rounded" style={{ color: rascunho.corPrimaria, background: rascunho.corPrimaria + '15' }}>{c.tags}</span>
+                          <span className="text-xs text-red-400 font-bold flex items-center gap-1"><Heart size={11} className="fill-current"/> {c.curtidas_comunicados?.length || 0}</span>
+                        </div>
+                        <button onClick={() => setPublicacaoVisualizada(c)} className="inline-flex items-center gap-2 text-sm font-bold text-white px-5 py-2.5 rounded-xl shadow-lg" style={{ background: `linear-gradient(135deg, ${rascunho.corPrimaria}, ${rascunho.corSecundaria})` }}>
+                          <FileText size={15}/> Ver publicação e Interações
+                        </button>
+                      </div>
+                    );
+                  })()}
+                  {/* Grade dos demais */}
+                  {comunicadosFiltrados.length > 1 && (
+                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+                      {comunicadosFiltrados.slice(1).map(c => (
+                        <div key={c.id} className="bg-white rounded-2xl border border-slate-100 p-4 shadow-sm hover:shadow-md transition-all">
+                          <h4 className="font-bold text-sm text-slate-800 mb-2 line-clamp-2">{c.titulo}</h4>
+                          <div className="flex items-center justify-between mt-3">
+                            <span className="text-[10px] font-bold px-1.5 py-0.5 rounded" style={{ color: rascunho.corPrimaria, background: rascunho.corPrimaria + '15' }}>{c.tags}</span>
+                            <div className="flex gap-1">
+                              <button onClick={() => setPublicacaoVisualizada(c)} className="px-2 py-1 text-[10px] font-bold text-white rounded-lg" style={{ background: rascunho.corPrimaria }}>Ver</button>
+                              <button onClick={() => carregarParaEdicao(c)} className="p-1 text-orange-500 bg-orange-50 rounded-lg"><Edit2 size={11}/></button>
+                              <button onClick={() => handleDeletarComunicado(c.id)} className="p-1 text-red-500 bg-red-50 rounded-lg"><Trash2 size={11}/></button>
+                            </div>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              ) : layoutAtual === 'foco' ? (
+                /* FOCO — 5 mais recentes */
+                <div className="max-w-2xl mx-auto space-y-3">
+                  <div className="flex items-center gap-2 mb-4 px-1">
+                    <div className="w-2 h-2 rounded-full animate-pulse" style={{ background: rascunho.corPrimaria }} />
+                    <span className="text-xs font-bold text-slate-500 uppercase tracking-wider">Modo Foco — {Math.min(comunicadosFiltrados.length, 5)} comunicados prioritários</span>
+                  </div>
+                  {[...comunicadosFiltrados].sort((a,b) => new Date(b.criado_em) - new Date(a.criado_em)).slice(0,5).map((c, i) => (
+                    <div key={c.id} className="flex items-center gap-4 p-4 sm:p-5 rounded-2xl border-2 transition-all hover:shadow-lg" style={{ borderColor: i === 0 ? rascunho.corPrimaria : '#e2e8f0', background: i === 0 ? rascunho.corPrimaria + '08' : '#fff' }}>
+                      <div className="shrink-0 w-8 h-8 rounded-xl flex items-center justify-center font-black text-sm text-white" style={{ background: i === 0 ? rascunho.corPrimaria : '#e2e8f0', color: i === 0 ? '#fff' : '#94a3b8' }}>{i + 1}</div>
+                      <div className="flex-1 min-w-0">
+                        <p className="font-extrabold text-slate-800 truncate">{c.titulo}</p>
+                        <p className="text-xs text-slate-400 mt-0.5">{new Date(c.criado_em).toLocaleDateString('pt-BR')} · {c.tags}</p>
+                      </div>
+                      <div className="flex gap-1.5 shrink-0">
+                        <button onClick={() => setPublicacaoVisualizada(c)} className="px-3 py-1.5 text-xs font-bold text-white rounded-xl" style={{ background: rascunho.corPrimaria }}>Ver</button>
+                        <button onClick={() => carregarParaEdicao(c)} className="p-1.5 text-orange-500 bg-orange-50 rounded-xl"><Edit2 size={13}/></button>
+                        <button onClick={() => handleDeletarComunicado(c.id)} className="p-1.5 text-red-500 bg-red-50 rounded-xl"><Trash2 size={13}/></button>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              ) : layoutAtual === 'timeline' ? (
+                /* TIMELINE — linha do tempo vertical */
+                <div className="relative max-w-3xl mx-auto">
+                  <div className="absolute left-5 top-0 bottom-0 w-0.5" style={{ background: rascunho.corPrimaria + '30' }} />
+                  <div className="space-y-6 pl-14">
+                    {comunicadosFiltrados.map((c, i) => (
+                      <div key={c.id} className="relative">
+                        {/* Ponto na linha */}
+                        <div className="absolute -left-9 top-4 w-4 h-4 rounded-full border-2 border-white shadow-md" style={{ background: i === 0 ? rascunho.corPrimaria : rascunho.corPrimaria + '60' }} />
+                        <div className="bg-white rounded-2xl border border-slate-100 p-4 sm:p-5 shadow-sm hover:shadow-md transition-all">
+                          <div className="flex items-start justify-between gap-3 mb-2">
+                            <div className="flex-1 min-w-0">
+                              <span className="text-[10px] font-black text-slate-400 uppercase tracking-wider">{new Date(c.criado_em).toLocaleDateString('pt-BR', { day: '2-digit', month: 'short', year: 'numeric' })}</span>
+                              <h4 className="font-extrabold text-slate-800 mt-0.5">{c.titulo}</h4>
+                            </div>
+                            <div className="flex gap-1.5 shrink-0">
+                              <button onClick={() => setPublicacaoVisualizada(c)} className="px-2.5 py-1.5 text-xs font-bold text-white rounded-lg" style={{ background: rascunho.corPrimaria }}>Ver</button>
+                              <button onClick={() => carregarParaEdicao(c)} className="p-1.5 text-orange-500 bg-orange-50 rounded-lg"><Edit2 size={12}/></button>
+                              <button onClick={() => handleDeletarComunicado(c.id)} className="p-1.5 text-red-500 bg-red-50 rounded-lg"><Trash2 size={12}/></button>
+                            </div>
+                          </div>
+                          <div className="flex flex-wrap gap-1.5">
+                            <span className="text-[10px] font-bold px-2 py-0.5 rounded-full" style={{ color: rascunho.corPrimaria, background: rascunho.corPrimaria + '15' }}>{c.tags}</span>
+                            <span className="text-[10px] text-red-400 font-bold flex items-center gap-0.5"><Heart size={9} className="fill-current"/> {c.curtidas_comunicados?.length || 0}</span>
+                            {c.anexos_comunicados?.length > 0 && <span className="text-[10px] text-emerald-600 font-bold flex items-center gap-0.5"><Paperclip size={9}/> {c.anexos_comunicados.length}</span>}
+                          </div>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              ) : layoutAtual === 'galeria' ? (
+                /* GALERIA — grade visual ampla 2 colunas */
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                  {comunicadosFiltrados.map((c, i) => (
+                    <div key={c.id} className="bg-white rounded-3xl overflow-hidden border border-slate-100 shadow-sm hover:shadow-xl transition-all group">
+                      {/* Cabeçalho colorido */}
+                      <div className="h-2" style={{ background: `linear-gradient(90deg, ${rascunho.corPrimaria}, ${rascunho.corSecundaria})` }} />
+                      <div className="p-5">
+                        <div className="flex items-start justify-between gap-2 mb-3">
+                          <div className="w-8 h-8 rounded-xl flex items-center justify-center text-white font-black text-sm shrink-0" style={{ background: rascunho.corPrimaria }}>{i + 1}</div>
+                          <div className="flex gap-1">
+                            <button onClick={() => carregarParaEdicao(c)} className="p-1.5 text-orange-500 bg-orange-50 rounded-lg opacity-0 group-hover:opacity-100 transition-opacity"><Edit2 size={12}/></button>
+                            <button onClick={() => handleDeletarComunicado(c.id)} className="p-1.5 text-red-500 bg-red-50 rounded-lg opacity-0 group-hover:opacity-100 transition-opacity"><Trash2 size={12}/></button>
+                          </div>
+                        </div>
+                        <h3 className="font-extrabold text-slate-800 mb-2 line-clamp-2">{c.titulo}</h3>
+                        <div className="flex flex-wrap gap-1.5 mb-4">
+                          <span className="text-[10px] font-bold px-2 py-0.5 rounded-full" style={{ color: rascunho.corPrimaria, background: rascunho.corPrimaria + '15' }}>{c.tags}</span>
+                          <span className="text-[10px] text-slate-400 font-bold flex items-center gap-0.5"><Calendar size={9}/> {new Date(c.criado_em).toLocaleDateString('pt-BR')}</span>
+                          <span className="text-[10px] text-red-400 font-bold flex items-center gap-0.5"><Heart size={9} className="fill-current"/> {c.curtidas_comunicados?.length || 0}</span>
+                        </div>
+                        <button onClick={() => setPublicacaoVisualizada(c)} className="w-full py-2.5 text-sm font-bold text-white rounded-xl transition-all" style={{ background: `linear-gradient(135deg, ${rascunho.corPrimaria}, ${rascunho.corSecundaria})` }}>
+                          Ver publicação
+                        </button>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              ) : layoutAtual === 'tabela' ? (
+                /* TABELA — linhas e colunas */
+                <div className="bg-white rounded-2xl border border-slate-200 overflow-hidden shadow-sm">
+                  <div className="overflow-x-auto">
+                    <table className="w-full text-sm">
+                      <thead>
+                        <tr style={{ background: rascunho.corPrimaria + '10', borderBottom: `2px solid ${rascunho.corPrimaria}30` }}>
+                          <th className="text-left px-4 py-3 text-xs font-black text-slate-600 uppercase tracking-wider">#</th>
+                          <th className="text-left px-4 py-3 text-xs font-black text-slate-600 uppercase tracking-wider">Título</th>
+                          <th className="text-left px-4 py-3 text-xs font-black text-slate-600 uppercase tracking-wider hidden sm:table-cell">Tags</th>
+                          <th className="text-left px-4 py-3 text-xs font-black text-slate-600 uppercase tracking-wider hidden md:table-cell">Data</th>
+                          <th className="text-left px-4 py-3 text-xs font-black text-slate-600 uppercase tracking-wider hidden md:table-cell">❤️</th>
+                          <th className="text-right px-4 py-3 text-xs font-black text-slate-600 uppercase tracking-wider">Ações</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-slate-100">
+                        {comunicadosFiltrados.map((c, i) => (
+                          <tr key={c.id} className="hover:bg-slate-50 transition-colors">
+                            <td className="px-4 py-3 text-xs font-black text-slate-400">{i + 1}</td>
+                            <td className="px-4 py-3 font-semibold text-slate-800 max-w-xs truncate">{c.titulo}</td>
+                            <td className="px-4 py-3 hidden sm:table-cell">
+                              <span className="text-[10px] font-bold px-2 py-0.5 rounded-full" style={{ color: rascunho.corPrimaria, background: rascunho.corPrimaria + '15' }}>{c.tags}</span>
+                            </td>
+                            <td className="px-4 py-3 text-xs text-slate-400 hidden md:table-cell">{new Date(c.criado_em).toLocaleDateString('pt-BR')}</td>
+                            <td className="px-4 py-3 text-xs text-red-400 font-bold hidden md:table-cell">{c.curtidas_comunicados?.length || 0}</td>
+                            <td className="px-4 py-3">
+                              <div className="flex items-center justify-end gap-1.5">
+                                <button onClick={() => setPublicacaoVisualizada(c)} className="px-2.5 py-1 text-[10px] font-bold text-white rounded-lg" style={{ background: rascunho.corPrimaria }}>Ver</button>
+                                <button onClick={() => carregarParaEdicao(c)} className="p-1.5 text-orange-500 bg-orange-50 rounded-lg hover:bg-orange-100 transition-colors"><Edit2 size={11}/></button>
+                                <button onClick={() => handleDeletarComunicado(c.id)} className="p-1.5 text-red-500 bg-red-50 rounded-lg hover:bg-red-100 transition-colors"><Trash2 size={11}/></button>
+                              </div>
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+              ) : (
+                /* CARDS — padrão */
+                <div className="grid gap-4">
+                  {comunicadosFiltrados.map((comunicado) => (
                     <div key={comunicado.id} className="bg-white rounded-3xl border border-slate-100 transition-all duration-300 shadow-sm hover:shadow-xl hover:shadow-slate-200/40 overflow-hidden">
                       <div className="p-4 sm:p-6 md:p-8 tv:p-10 flex flex-col md:flex-row md:items-center justify-between gap-4 sm:gap-6">
-                        
                         <div className="flex-1">
-                          <h3 className="font-extrabold text-xl text-slate-800 leading-tight mb-3">
-                            {comunicado.titulo}
-                          </h3>
-                          
+                          <h3 className="font-extrabold text-xl text-slate-800 leading-tight mb-3">{comunicado.titulo}</h3>
                           <div className="flex flex-wrap items-center gap-3 mb-5">
                             <span className="text-[10px] font-black text-slate-500 uppercase tracking-widest bg-slate-100 px-3 py-1.5 rounded-lg flex items-center gap-1">
                               <Calendar size={12}/> {new Date(comunicado.criado_em).toLocaleDateString('pt-BR')}
                             </span>
-                            <span className="text-xs text-[#00A859] font-bold flex items-center gap-1.5 bg-[#00A859]/5 px-3 py-1.5 rounded-lg">
+                            <span className="text-xs font-bold flex items-center gap-1.5 px-3 py-1.5 rounded-lg" style={{ color: rascunho.corPrimaria, background: rascunho.corPrimaria + '10' }}>
                               <Tag size={12}/> {comunicado.tags}
                             </span>
                             {comunicado.modificado_por_usuario ? (
-                              <span className="text-xs font-bold text-amber-600 bg-amber-50 px-3 py-1.5 rounded-lg flex items-center gap-1">
-                                ✏️ Modificado por: {comunicado.modificado_por_usuario.email?.split('@')[0]}
-                              </span>
+                              <span className="text-xs font-bold text-amber-600 bg-amber-50 px-3 py-1.5 rounded-lg flex items-center gap-1">✏️ Modificado por: {comunicado.modificado_por_usuario.email?.split('@')[0]}</span>
                             ) : comunicado.autor ? (
-                              <span className="text-xs font-bold text-slate-500 bg-slate-100 px-3 py-1.5 rounded-lg flex items-center gap-1">
-                                👤 Por: {comunicado.autor.email?.split('@')[0]}
-                              </span>
+                              <span className="text-xs font-bold text-slate-500 bg-slate-100 px-3 py-1.5 rounded-lg flex items-center gap-1">👤 Por: {comunicado.autor.email?.split('@')[0]}</span>
                             ) : null}
-                            
-                            {/* SELO DE CURTIDAS AQUI */}
                             <span className="text-xs text-red-500 font-bold flex items-center gap-1.5 bg-red-50 px-3 py-1.5 rounded-lg">
-                              <Heart size={12} className={comunicado.curtidas_comunicados?.length > 0 ? "fill-current" : ""}/> 
-                              {comunicado.curtidas_comunicados?.length || 0} Curtida(s)
+                              <Heart size={12} className={comunicado.curtidas_comunicados?.length > 0 ? "fill-current" : ""}/> {comunicado.curtidas_comunicados?.length || 0} Curtida(s)
                             </span>
-
                             {comunicado.anexos_comunicados?.length > 0 && (
                               <span className="text-xs text-emerald-600 font-bold flex items-center gap-1.5 bg-emerald-50 px-3 py-1.5 rounded-lg">
                                 <Paperclip size={12}/> {comunicado.anexos_comunicados.length} Anexo(s)
                               </span>
                             )}
                           </div>
-
-                          <button 
-                            onClick={() => setPublicacaoVisualizada(comunicado)}
+                          <button onClick={() => setPublicacaoVisualizada(comunicado)}
                             className="inline-flex items-center gap-2 text-sm font-bold text-white transition-all px-5 py-2.5 rounded-xl shadow-lg active:scale-95"
                             style={{ background: `linear-gradient(135deg, ${rascunho.corPrimaria}, ${rascunho.corSecundaria})` }}
                           >
                             <FileText size={16}/> Ver publicação e Interações
                           </button>
                         </div>
-                        
                         <div className="flex md:flex-col items-center justify-end gap-2 pt-4 md:pt-0 border-t md:border-0 border-slate-100 w-full md:w-auto">
-                          <button 
-                            onClick={() => carregarParaEdicao(comunicado)}
+                          <button onClick={() => carregarParaEdicao(comunicado)}
                             className="flex-1 md:flex-none flex items-center justify-center gap-2 px-4 py-2 text-sm font-bold text-orange-600 bg-orange-50 hover:bg-gradient-to-r hover:from-orange-500 hover:to-orange-600 hover:text-white rounded-xl transition-all border border-orange-200 hover:border-transparent shadow-sm hover:shadow-lg hover:shadow-orange-200 active:scale-95"
                           >
                             <Edit2 size={16} /> Editar
                           </button>
-                          <button 
-                            onClick={() => handleDeletarComunicado(comunicado.id)}
+                          <button onClick={() => handleDeletarComunicado(comunicado.id)}
                             className="flex-1 md:flex-none flex items-center justify-center gap-2 px-4 py-2 text-sm font-bold text-red-600 bg-red-50 hover:bg-gradient-to-r hover:from-red-500 hover:to-red-600 hover:text-white rounded-xl transition-all border border-red-200 hover:border-transparent shadow-sm hover:shadow-lg hover:shadow-red-200 active:scale-95"
                           >
                             <Trash2 size={16} /> Excluir
                           </button>
                         </div>
-
                       </div>
                     </div>
-                  ))
-                )}
-              </div>
+                  ))}
+                </div>
+              )}
             </section>
           </div>
         )}
@@ -1156,6 +1808,73 @@ export default function DashboardMonitoria() {
 
       </div>
 
+      {/* Modal de preview — mostra exatamente como vai ficar publicado */}
+      {previewAberto && (
+        <div className="fixed inset-0 z-[400] flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm animate-in fade-in duration-200"
+          onClick={() => setPreviewAberto(false)}
+        >
+          <div className="bg-white rounded-3xl shadow-2xl w-full max-w-4xl max-h-[90vh] flex flex-col overflow-hidden animate-in zoom-in-95 duration-200"
+            onClick={e => e.stopPropagation()}
+            style={{ color: '#1e293b' }}
+          >
+            {/* Header do preview */}
+            <div className="px-6 py-4 border-b border-slate-100 bg-blue-50 flex items-center justify-between shrink-0">
+              <div className="flex items-center gap-3">
+                <Eye size={20} className="text-blue-600" />
+                <div>
+                  <h3 className="font-extrabold text-blue-900 text-lg">Pré-visualização da Publicação</h3>
+                  <p className="text-xs text-blue-600">Assim ficará para os atendentes após publicar</p>
+                </div>
+              </div>
+              <button onClick={() => setPreviewAberto(false)} className="p-2 text-slate-400 hover:text-slate-700 rounded-full hover:bg-slate-100 transition-all">
+                <X size={20}/>
+              </button>
+            </div>
+
+            {/* Conteúdo do preview — renderiza EXATAMENTE como vai ficar */}
+            <div className="flex-1 overflow-y-auto">
+              {/* Título */}
+              <div className="px-6 py-4 border-b border-slate-100" style={{ background: '#f8fafc' }}>
+                <h2 className="text-2xl font-extrabold" style={{ color: '#0f172a' }}>
+                  {titulo || 'Sem título'}
+                </h2>
+                <div className="flex items-center gap-3 mt-2 text-xs text-slate-500">
+                  <span>📅 {new Date().toLocaleDateString('pt-BR')}</span>
+                  {tags && <span className="px-2 py-0.5 rounded-full" style={{ background: rascunho.corPrimaria + '15', color: rascunho.corPrimaria }}>{tags}</span>}
+                </div>
+              </div>
+
+              {/* Conteúdo — sem nenhum CSS que altere o HTML original */}
+              <div className="p-6 md:p-10"
+                style={{ background: '#ffffff', color: '#334155', fontFamily: '-apple-system, BlinkMacSystemFont, Segoe UI, Roboto, sans-serif', fontSize: '14px', lineHeight: '1.7' }}
+                dangerouslySetInnerHTML={{ __html: conteudo || '<p style="color:#94a3b8;font-style:italic;">Conteúdo vazio</p>' }}
+              />
+            </div>
+
+            {/* Footer do preview */}
+            <div className="px-6 py-4 border-t border-slate-100 bg-slate-50 flex items-center justify-between shrink-0">
+              <p className="text-xs text-slate-500">
+                ✅ Se está como esperado, feche e clique em "{idEmEdicao ? 'Atualizar Comunicado' : 'Publicar Agora'}"
+              </p>
+              <button onClick={() => setPreviewAberto(false)}
+                className="px-5 py-2.5 text-sm font-bold text-white rounded-xl active:scale-95"
+                style={{ background: rascunho.corPrimaria }}
+              >
+                Fechar preview
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Modal de inserção de vídeo no editor */}
+      <ModalVideo
+        onInserir={(html) => setConteudo(prev => prev + html)}
+        aberto={modalVideoAberto}
+        onFechar={() => setModalVideoAberto(false)}
+        corPrimaria={rascunho.corPrimaria}
+      />
+
       {/* ======================================================== */}
       {/* MODAL TELA CHEIA (COM OS NOMES DE QUEM CURTIU)           */}
       {/* ======================================================== */}
@@ -1205,16 +1924,15 @@ export default function DashboardMonitoria() {
               </button>
             </div>
 
-            <div className="p-6 md:p-10 overflow-y-auto modal-leitura"
+            <div className="p-6 md:p-10 overflow-y-auto"
               style={{ background: '#ffffff', color: '#334155' }}
             >
-               <div className="ql-snow">
-                  <div 
-                    className="ql-editor"
-                    style={{ color: '#334155', background: '#ffffff' }}
-                    dangerouslySetInnerHTML={{ __html: decodificarHTML(publicacaoVisualizada.conteudo) }} 
-                  />
-               </div>
+               {/* Renderiza o HTML exatamente como foi salvo — mesmo método do preview */}
+               <div 
+                 className="conteudo-publicacao"
+                 style={{ color: '#334155', background: '#ffffff', fontFamily: '-apple-system, BlinkMacSystemFont, Segoe UI, Roboto, sans-serif', fontSize: '14px', lineHeight: '1.7' }}
+                 dangerouslySetInnerHTML={{ __html: publicacaoVisualizada.conteudo || '' }} 
+               />
             </div>
 
             {/* LISTA DE QUEM CURTIU */}
@@ -1380,216 +2098,146 @@ export default function DashboardMonitoria() {
         <div className="fixed inset-0 z-[200] flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm animate-in fade-in duration-200" onClick={() => setModalInstrucoes(false)}>
           <div className="bg-white rounded-3xl shadow-2xl w-full max-w-4xl max-h-[90vh] flex flex-col overflow-hidden animate-in zoom-in-95 duration-200" onClick={(e) => e.stopPropagation()}>
             
-            {/* Header */}
-            <div className="p-6 md:p-8 border-b border-slate-100 bg-gradient-to-r from-emerald-50 to-[#00A859]/5 flex justify-between items-start gap-4 shrink-0">
+            <div className="p-6 md:p-8 border-b border-slate-100 bg-gradient-to-r from-emerald-50 to-emerald-100 flex justify-between items-start gap-4 shrink-0">
               <div className="flex items-center gap-4">
                 <div className="bg-gradient-to-br from-emerald-500 to-emerald-600 p-4 rounded-2xl text-white shadow-lg shadow-emerald-200">
                   <HelpCircle size={32} />
                 </div>
                 <div>
-                  <h2 className="text-2xl md:text-3xl font-extrabold text-slate-800 leading-tight">
-                    Instruções de Uso - Monitoria
-                  </h2>
-                  <p className="text-slate-600 font-medium mt-1">
-                    Guia completo de todas as funcionalidades do painel
-                  </p>
+                  <h2 className="text-2xl md:text-3xl font-extrabold text-slate-800">Instruções de Uso — Monitoria</h2>
+                  <p className="text-slate-600 font-medium mt-1">Guia completo de todas as funcionalidades</p>
                 </div>
               </div>
-              <button 
-                onClick={() => setModalInstrucoes(false)}
-                className="p-2 text-slate-400 hover:text-slate-700 hover:bg-slate-200 rounded-full transition-all shrink-0"
-              >
+              <button onClick={() => setModalInstrucoes(false)} className="p-2 text-slate-400 hover:text-slate-700 hover:bg-slate-200 rounded-full transition-all shrink-0">
                 <X size={24} />
               </button>
             </div>
 
-            {/* Conteúdo */}
             <div className="p-6 md:p-8 overflow-y-auto">
-              <div className="space-y-8">
-                
-                {/* Seção 1: Criar Comunicados */}
-                <div className="bg-gradient-to-br from-[#00A859]/5 to-[#00A859]/10 p-6 rounded-2xl border border-[#00A859]/30">
-                  <div className="flex items-center gap-3 mb-4">
-                    <div className="bg-[#00A859] p-2 rounded-xl text-white">
-                      <Plus size={24} />
-                    </div>
-                    <h3 className="text-xl font-extrabold text-slate-800">1. Criar e Publicar Comunicados</h3>
-                  </div>
-                  <ul className="space-y-3 text-slate-700">
-                    <li className="flex items-start gap-3">
-                      <span className="text-[#00A859] font-bold shrink-0">•</span>
-                      <span><strong>Título:</strong> Digite um título claro e objetivo para o comunicado</span>
-                    </li>
-                    <li className="flex items-start gap-3">
-                      <span className="text-[#00A859] font-bold shrink-0">•</span>
-                      <span><strong>Conteúdo:</strong> Use o editor de texto rico com 16 fontes disponíveis, formatação (negrito, itálico, sublinhado), listas, links e imagens</span>
-                    </li>
-                    <li className="flex items-start gap-3">
-                      <span className="text-[#00A859] font-bold shrink-0">•</span>
-                      <span><strong>Tags:</strong> Adicione palavras-chave separadas por vírgula para facilitar a busca (ex: processos, logística, sac)</span>
-                    </li>
-                    <li className="flex items-start gap-3">
-                      <span className="text-[#00A859] font-bold shrink-0">•</span>
-                      <span><strong>Anexos:</strong> Faça upload de arquivos (até 50MB) como PDFs, planilhas, imagens, etc.</span>
-                    </li>
-                    <li className="flex items-start gap-3">
-                      <span className="text-[#00A859] font-bold shrink-0">•</span>
-                      <span><strong>Publicar:</strong> Clique em "Publicar Agora" e o comunicado ficará visível para todos os atendentes imediatamente</span>
-                    </li>
+              <div className="space-y-6">
+
+                {/* 1. Editor de Conteúdo */}
+                <div className="bg-gradient-to-br from-blue-50 to-blue-100 p-5 rounded-2xl border border-blue-200">
+                  <h3 className="text-lg font-extrabold text-slate-800 mb-3 flex items-center gap-2">📝 1. Editor de Conteúdo (TinyMCE)</h3>
+                  <ul className="space-y-2 text-sm text-slate-700">
+                    <li>• <strong>Formatação completa:</strong> Negrito, itálico, sublinhado, tachado, cores de texto e fundo</li>
+                    <li>• <strong>Fontes e tamanhos:</strong> Seletor de família de fonte e tamanho na toolbar</li>
+                    <li>• <strong>Alinhamento:</strong> Esquerda, centro, direita, justificado — funciona para texto E imagens</li>
+                    <li>• <strong>Imagens:</strong> Inserir via toolbar → redimensionar arrastando as bordas → alinhar</li>
+                    <li>• <strong>Vídeos:</strong> Insert → Media → colar URL do YouTube/Vimeo ou fazer upload local</li>
+                    <li>• <strong>Tabelas:</strong> Inserir, mesclar células, adicionar/remover linhas e colunas</li>
+                    <li>• <strong>Colar do Word:</strong> Copie do Word e cole — a formatação é preservada</li>
+                    <li>• <strong>Emoticons:</strong> Inserir emojis diretamente no texto</li>
+                    <li>• <strong>Tela cheia:</strong> Botão fullscreen para editar em tela inteira</li>
+                    <li>• <strong>Código fonte:</strong> Botão "Code" para editar o HTML diretamente</li>
                   </ul>
                 </div>
 
-                {/* Seção 2: Editar e Excluir */}
-                <div className="bg-gradient-to-br from-orange-50 to-orange-100 p-6 rounded-2xl border border-orange-200">
-                  <div className="flex items-center gap-3 mb-4">
-                    <div className="bg-orange-600 p-2 rounded-xl text-white">
-                      <Edit2 size={24} />
-                    </div>
-                    <h3 className="text-xl font-extrabold text-slate-800">2. Editar e Excluir Comunicados</h3>
-                  </div>
-                  <ul className="space-y-3 text-slate-700">
-                    <li className="flex items-start gap-3">
-                      <span className="text-orange-600 font-bold shrink-0">•</span>
-                      <span><strong>Editar:</strong> Clique no botão "Editar" em qualquer comunicado para modificar título, conteúdo, tags ou anexos</span>
-                    </li>
-                    <li className="flex items-start gap-3">
-                      <span className="text-orange-600 font-bold shrink-0">•</span>
-                      <span><strong>Modo de Edição:</strong> O formulário ficará destacado em laranja e o botão mudará para "Atualizar Comunicado"</span>
-                    </li>
-                    <li className="flex items-start gap-3">
-                      <span className="text-orange-600 font-bold shrink-0">•</span>
-                      <span><strong>Cancelar:</strong> Use o botão "Cancelar" para sair do modo de edição sem salvar alterações</span>
-                    </li>
-                    <li className="flex items-start gap-3">
-                      <span className="text-orange-600 font-bold shrink-0">•</span>
-                      <span><strong>Excluir:</strong> Clique em "Excluir" e confirme para remover permanentemente o comunicado</span>
-                    </li>
+                {/* 2. Publicação */}
+                <div className="bg-gradient-to-br from-emerald-50 to-emerald-100 p-5 rounded-2xl border border-emerald-200">
+                  <h3 className="text-lg font-extrabold text-slate-800 mb-3 flex items-center gap-2">📢 2. Publicar Comunicados</h3>
+                  <ul className="space-y-2 text-sm text-slate-700">
+                    <li>• <strong>Título:</strong> Obrigatório — claro e objetivo</li>
+                    <li>• <strong>Conteúdo:</strong> Use o editor rico para formatar o comunicado</li>
+                    <li>• <strong>Tags:</strong> Palavras-chave separadas por vírgula (ex: processos, sac, crédito)</li>
+                    <li>• <strong>Categoria/Pasta:</strong> Defina a pasta para organização (quando ativado em Personalizar)</li>
+                    <li>• <strong>Dicas de destaque:</strong> Botão "💡 Inserir dica" adiciona alertas coloridos no conteúdo</li>
+                    <li>• <strong>Visualizar antes:</strong> Botão "👁 Visualizar antes de publicar" mostra exatamente como ficará</li>
+                    <li>• <strong>Anexos:</strong> Upload de arquivos até 50MB (PDFs, planilhas, imagens, vídeos)</li>
+                    <li>• <strong>Mídias:</strong> Upload de vídeos, GIFs, imagens + links do YouTube com preview</li>
+                    <li>• <strong>Publicar:</strong> Clique em "Publicar Agora" — todos os atendentes verão imediatamente</li>
                   </ul>
                 </div>
 
-                {/* Seção 3: Visualizar Interações */}
-                <div className="bg-gradient-to-br from-pink-50 to-pink-100 p-6 rounded-2xl border border-pink-200">
-                  <div className="flex items-center gap-3 mb-4">
-                    <div className="bg-pink-600 p-2 rounded-xl text-white">
-                      <Heart size={24} />
-                    </div>
-                    <h3 className="text-xl font-extrabold text-slate-800">3. Visualizar Interações e Curtidas</h3>
-                  </div>
-                  <ul className="space-y-3 text-slate-700">
-                    <li className="flex items-start gap-3">
-                      <span className="text-pink-600 font-bold shrink-0">•</span>
-                      <span><strong>Ver Publicação:</strong> Clique em "Ver publicação e Interações" para abrir o comunicado completo</span>
-                    </li>
-                    <li className="flex items-start gap-3">
-                      <span className="text-pink-600 font-bold shrink-0">•</span>
-                      <span><strong>Curtidas:</strong> Veja quantas curtidas o comunicado recebeu e quem curtiu (lista de nomes)</span>
-                    </li>
-                    <li className="flex items-start gap-3">
-                      <span className="text-pink-600 font-bold shrink-0">•</span>
-                      <span><strong>Anexos:</strong> Baixe os arquivos anexados clicando nos links na parte inferior do modal</span>
-                    </li>
+                {/* 3. Editor Visual Polotno */}
+                <div className="bg-gradient-to-br from-purple-50 to-purple-100 p-5 rounded-2xl border border-purple-200">
+                  <h3 className="text-lg font-extrabold text-slate-800 mb-3 flex items-center gap-2">🎨 3. Editor Visual (Polotno Studio)</h3>
+                  <ul className="space-y-2 text-sm text-slate-700">
+                    <li>• <strong>Abrir:</strong> Botão "🎨 Abrir Editor Visual" abaixo do campo de conteúdo</li>
+                    <li>• <strong>Criar design:</strong> Drag & drop de textos, imagens, formas, templates</li>
+                    <li>• <strong>Baixar:</strong> Clique em "Baixar" no Polotno (botão azul no canto superior direito)</li>
+                    <li>• <strong>Inserir no comunicado:</strong> Clique no botão verde "⬆️ Upload da imagem do design"</li>
+                    <li>• <strong>A imagem vai direto para o conteúdo</strong> — pronta para publicar</li>
                   </ul>
                 </div>
 
-                {/* Seção 4: Relatórios */}
-                <div className="bg-gradient-to-br from-purple-50 to-purple-100 p-6 rounded-2xl border border-purple-200">
-                  <div className="flex items-center gap-3 mb-4">
-                    <div className="bg-purple-600 p-2 rounded-xl text-white">
-                      <BarChart3 size={24} />
-                    </div>
-                    <h3 className="text-xl font-extrabold text-slate-800">4. Relatórios e Análises</h3>
-                  </div>
-                  <ul className="space-y-3 text-slate-700">
-                    <li className="flex items-start gap-3">
-                      <span className="text-purple-600 font-bold shrink-0">•</span>
-                      <span><strong>Cards de Métricas:</strong> Veja total de comunicados, total de leituras e comunicado mais acessado</span>
-                    </li>
-                    <li className="flex items-start gap-3">
-                      <span className="text-purple-600 font-bold shrink-0">•</span>
-                      <span><strong>Top 5 Mais Acessados:</strong> Ranking visual com barras de progresso mostrando os comunicados mais lidos</span>
-                    </li>
-                    <li className="flex items-start gap-3">
-                      <span className="text-purple-600 font-bold shrink-0">•</span>
-                      <span><strong>Auditoria Individual:</strong> Tabela completa mostrando quem leu cada comunicado, quando e qual horário</span>
-                    </li>
-                    <li className="flex items-start gap-3">
-                      <span className="text-purple-600 font-bold shrink-0">•</span>
-                      <span><strong>Buscar:</strong> Use o campo de busca para filtrar por nome de atendente ou título do comunicado</span>
-                    </li>
-                    <li className="flex items-start gap-3">
-                      <span className="text-purple-600 font-bold shrink-0">•</span>
-                      <span><strong>Baixar Relatório:</strong> Clique em "Baixar Relatório (CSV)" para exportar todos os dados para Excel</span>
-                    </li>
+                {/* 4. Editar e Excluir */}
+                <div className="bg-gradient-to-br from-orange-50 to-orange-100 p-5 rounded-2xl border border-orange-200">
+                  <h3 className="text-lg font-extrabold text-slate-800 mb-3 flex items-center gap-2">✏️ 4. Editar e Excluir</h3>
+                  <ul className="space-y-2 text-sm text-slate-700">
+                    <li>• <strong>Editar:</strong> Botão "Editar" em qualquer comunicado → formulário fica em modo edição (laranja)</li>
+                    <li>• <strong>Atualizar:</strong> Modifique o que precisar e clique em "Atualizar Comunicado"</li>
+                    <li>• <strong>Cancelar:</strong> Botão "Cancelar" sai do modo edição sem salvar</li>
+                    <li>• <strong>Excluir:</strong> Botão "Excluir" com confirmação — ação irreversível</li>
+                    <li>• <strong>Rastreamento:</strong> O sistema registra quem modificou por último</li>
                   </ul>
                 </div>
 
-                {/* Seção 5: Busca */}
-                <div className="bg-gradient-to-br from-slate-50 to-slate-100 p-6 rounded-2xl border border-slate-200">
-                  <div className="flex items-center gap-3 mb-4">
-                    <div className="bg-slate-600 p-2 rounded-xl text-white">
-                      <Search size={24} />
-                    </div>
-                    <h3 className="text-xl font-extrabold text-slate-800">5. Buscar Comunicados</h3>
-                  </div>
-                  <ul className="space-y-3 text-slate-700">
-                    <li className="flex items-start gap-3">
-                      <span className="text-slate-600 font-bold shrink-0">•</span>
-                      <span><strong>Campo de Busca:</strong> Digite palavras-chave no campo "Pesquisar por título ou tag..."</span>
-                    </li>
-                    <li className="flex items-start gap-3">
-                      <span className="text-slate-600 font-bold shrink-0">•</span>
-                      <span><strong>Filtro em Tempo Real:</strong> Os resultados são filtrados automaticamente conforme você digita</span>
-                    </li>
-                    <li className="flex items-start gap-3">
-                      <span className="text-slate-600 font-bold shrink-0">•</span>
-                      <span><strong>Busca por Título ou Tag:</strong> A busca funciona tanto no título quanto nas tags dos comunicados</span>
-                    </li>
+                {/* 5. Relatórios */}
+                <div className="bg-gradient-to-br from-indigo-50 to-indigo-100 p-5 rounded-2xl border border-indigo-200">
+                  <h3 className="text-lg font-extrabold text-slate-800 mb-3 flex items-center gap-2">📊 5. Relatórios e Análises</h3>
+                  <ul className="space-y-2 text-sm text-slate-700">
+                    <li>• <strong>Métricas:</strong> Total de comunicados, leituras e mais acessado</li>
+                    <li>• <strong>Top 5:</strong> Ranking visual dos comunicados mais lidos com barras de progresso</li>
+                    <li>• <strong>Auditoria:</strong> Tabela com quem leu, quando e qual comunicado</li>
+                    <li>• <strong>Busca:</strong> Filtrar por atendente ou título</li>
+                    <li>• <strong>Exportar CSV:</strong> Baixar relatório completo para Excel</li>
                   </ul>
                 </div>
 
-                {/* Dicas Importantes */}
-                <div className="bg-gradient-to-r from-yellow-50 to-amber-50 p-6 rounded-2xl border-2 border-yellow-300">
-                  <div className="flex items-center gap-3 mb-4">
-                    <span className="text-3xl">💡</span>
-                    <h3 className="text-xl font-extrabold text-slate-800">Dicas Importantes</h3>
-                  </div>
-                  <ul className="space-y-2 text-slate-700">
-                    <li className="flex items-start gap-2">
-                      <span className="text-yellow-600 font-bold">✓</span>
-                      <span>Use títulos descritivos para facilitar a busca dos atendentes</span>
-                    </li>
-                    <li className="flex items-start gap-2">
-                      <span className="text-yellow-600 font-bold">✓</span>
-                      <span>Adicione sempre tags relevantes para melhorar a organização</span>
-                    </li>
-                    <li className="flex items-start gap-2">
-                      <span className="text-yellow-600 font-bold">✓</span>
-                      <span>Revise o conteúdo antes de publicar - todos os atendentes verão imediatamente</span>
-                    </li>
-                    <li className="flex items-start gap-2">
-                      <span className="text-yellow-600 font-bold">✓</span>
-                      <span>Monitore os relatórios mensalmente para identificar conteúdos mais relevantes</span>
-                    </li>
-                    <li className="flex items-start gap-2">
-                      <span className="text-yellow-600 font-bold">✓</span>
-                      <span>Baixe o relatório CSV no final de cada mês para histórico</span>
-                    </li>
+                {/* 6. Personalização */}
+                <div className="bg-gradient-to-br from-amber-50 to-amber-100 p-5 rounded-2xl border border-amber-200">
+                  <h3 className="text-lg font-extrabold text-slate-800 mb-3 flex items-center gap-2">🎨 6. Personalização do Dashboard</h3>
+                  <ul className="space-y-2 text-sm text-slate-700">
+                    <li>• <strong>Temas:</strong> 8 temas pré-definidos (Corporativo, Escuro, Moderno, Neon, etc.)</li>
+                    <li>• <strong>Cores:</strong> Personalizar cor primária, secundária, fundo, texto e destaque</li>
+                    <li>• <strong>Texto:</strong> Tamanho (Compacto/Padrão/Acessível) e família de fonte</li>
+                    <li>• <strong>Layout:</strong> Cards, Lista, Kanban, Compacto, Magazine, Timeline, Galeria, Tabela</li>
+                    <li>• <strong>Organização:</strong> Livre (cronológico) ou Pastas (agrupado por categoria)</li>
+                    <li>• <strong>Pastas:</strong> Criar, renomear, excluir, reordenar pastas e mover comunicados entre elas</li>
+                    <li>• <strong>Fundo:</strong> Upload de imagem de fundo com controle de opacidade</li>
+                    <li>• <strong>Efeitos:</strong> Animações, modo minimalista, alto contraste</li>
+                    <li>• <strong>Perfis:</strong> Salvar combinações (Trabalho, Noturno, Alta Concentração)</li>
+                    <li>• <strong>Auto-save:</strong> Todas as preferências são salvas automaticamente por usuário</li>
+                  </ul>
+                </div>
+
+                {/* 7. Vídeos */}
+                <div className="bg-gradient-to-br from-red-50 to-red-100 p-5 rounded-2xl border border-red-200">
+                  <h3 className="text-lg font-extrabold text-slate-800 mb-3 flex items-center gap-2">🎬 7. Vídeos e Mídias</h3>
+                  <ul className="space-y-2 text-sm text-slate-700">
+                    <li>• <strong>YouTube:</strong> Insert → Media → colar URL → vídeo aparece embutido</li>
+                    <li>• <strong>Upload local:</strong> Insert → Media → Browse → selecionar arquivo de vídeo</li>
+                    <li>• <strong>Formatos:</strong> MP4, WebM, OGG, AVI, MOV, MKV, WMV</li>
+                    <li>• <strong>GIFs:</strong> Inserir como imagem — animação é preservada</li>
+                    <li>• <strong>Botão vídeo:</strong> Ícone 🎬 na toolbar abre modal para URL ou upload</li>
+                  </ul>
+                </div>
+
+                {/* 8. Dicas */}
+                <div className="bg-gradient-to-br from-yellow-50 to-yellow-100 p-5 rounded-2xl border border-yellow-200">
+                  <h3 className="text-lg font-extrabold text-slate-800 mb-3 flex items-center gap-2">💡 8. Dicas Importantes</h3>
+                  <ul className="space-y-2 text-sm text-slate-700">
+                    <li>• Use "Visualizar antes de publicar" para conferir como ficará para os atendentes</li>
+                    <li>• Imagens podem ser redimensionadas arrastando as bordas no editor</li>
+                    <li>• O botão "💡 Inserir dica" adiciona alertas coloridos (Atenção, Importante, Info, Dica)</li>
+                    <li>• Categorize os comunicados para facilitar a organização por pastas</li>
+                    <li>• Vídeos do YouTube são a melhor opção (leves e com preview automático)</li>
+                    <li>• Cada usuário tem sua própria personalização — não afeta os outros</li>
+                    <li>• O sistema notifica automaticamente todos os atendentes ao publicar</li>
                   </ul>
                 </div>
 
               </div>
             </div>
 
-            {/* Footer */}
             <div className="p-6 border-t border-slate-100 bg-slate-50 shrink-0">
-              <button
-                onClick={() => setModalInstrucoes(false)}
-                className="w-full py-4 bg-gradient-to-r from-emerald-600 to-emerald-700 hover:from-emerald-700 hover:to-emerald-800 text-white font-bold rounded-xl transition-all shadow-lg shadow-emerald-200 hover:shadow-xl hover:shadow-emerald-300 active:scale-95"
+              <button onClick={() => setModalInstrucoes(false)}
+                className="w-full py-4 bg-gradient-to-r from-emerald-600 to-emerald-700 hover:from-emerald-700 hover:to-emerald-800 text-white font-bold rounded-xl transition-all shadow-lg shadow-emerald-200 active:scale-95"
               >
                 Entendi, vamos começar!
               </button>
             </div>
-
           </div>
         </div>
       )}

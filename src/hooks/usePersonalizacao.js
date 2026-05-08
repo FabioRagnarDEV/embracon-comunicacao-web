@@ -10,6 +10,7 @@ export const PADRAO = {
   corDestaque: '#00A859',
   tamanhoFonte: 'padrao',
   layout: 'cards',
+  organizacao: 'livre',   // 'livre' | 'pastas'
   animacoes: true,
   minimalista: false,
   modeFoco: false,
