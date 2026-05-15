@@ -130,8 +130,7 @@ export function usePersonalizacao(dashboardId = 'atendente') {
   const [painelAberto,   setPainelAberto]   = useState(false);
   const [abaSelecionada, setAbaSelecionada] = useState('temas');
 
-  // ── AUTO-SAVE: persiste no localStorage a cada mudança no rascunho ──────────
-  // Isso garante que ao recarregar a página, o estado é restaurado automaticamente.
+  // ── AUTO-SAVE ────────────────────────────────────────────────────────────────
   useEffect(() => {
     try {
       localStorage.setItem(storageKey, JSON.stringify(rascunho));
@@ -163,8 +162,7 @@ export function usePersonalizacao(dashboardId = 'atendente') {
     localStorage.setItem(`${storageKey}_manual`, '1');
   }, [storageKey]);
 
-  // "Salvar" agora apenas fecha o painel e marca como manual
-  // (o auto-save já persistiu tudo)
+  // "Salvar" fecha o painel e marca como manual (auto-save já persistiu)
   const salvar = useCallback(() => {
     localStorage.setItem(`${storageKey}_manual`, '1');
     setPainelAberto(false);

@@ -87,7 +87,7 @@ ResizableImage.tagName = 'IMG';
 ReactQuill.Quill.register(ResizableImage, true);
 
 // Configuração do Toolbar (mantida para compatibilidade com estilos CSS)
-// eslint-disable-next-line
+// eslint-disable-next-line no-unused-vars
 const _modulosQuill = {
   toolbar: {
     container: [
@@ -252,11 +252,9 @@ export default function DashboardMonitoria() {
 
   const [abaAtiva, setAbaAtiva] = useState('comunicados');
 
-  // Layout ativo — igual ao Atendente, muda toda a estrutura visual
   const layoutAtual = rascunho.modeFoco ? 'foco' : (rascunho.layout || 'cards');
   const pastasHook = usePastas();
 
-  // Estado do modal de vídeo e editor visual
   const [modalVideoAberto, setModalVideoAberto] = useState(false);
   const [editorVisualAberto, setEditorVisualAberto] = useState(false);
   const [previewAberto, setPreviewAberto] = useState(false);
@@ -285,16 +283,14 @@ export default function DashboardMonitoria() {
   const [modalLogoutAberto, setModalLogoutAberto] = useState(false);
   const [despedindo, setDespedindo] = useState(false);
 
-  // Estados para modal de boas-vindas
+  // Boas-vindas (primeiro acesso)
   const [modalBoasVindas, setModalBoasVindas] = useState(false);
   const [etapaBoasVindas, setEtapaBoasVindas] = useState('pergunta'); // 'pergunta' ou 'saudacao'
   const [nomePreferido, setNomePreferido] = useState('');
   const [tratamento, setTratamento] = useState(''); // 'masculino' ou 'feminino'
 
-  // Estado para modal de instruções
   const [modalInstrucoes, setModalInstrucoes] = useState(false);
 
-  // Verificar se é o primeiro acesso (apenas uma vez)
   useEffect(() => {
     const jaConfigurou = localStorage.getItem('usuario_configurado');
     
@@ -302,13 +298,11 @@ export default function DashboardMonitoria() {
       setModalBoasVindas(true);
       setEtapaBoasVindas('pergunta');
     } else {
-      // Carregar dados salvos
       setNomePreferido(localStorage.getItem('nome_preferido') || '');
       setTratamento(localStorage.getItem('tratamento') || '');
     }
   }, []);
 
-  // Função para obter saudação baseada no horário
   const obterSaudacao = () => {
     const hora = new Date().getHours();
     if (hora >= 5 && hora < 12) return 'Bom dia';
@@ -316,14 +310,12 @@ export default function DashboardMonitoria() {
     return 'Boa noite';
   };
 
-  // Função para confirmar nome e tratamento
   const confirmarNome = () => {
     if (!nomePreferido.trim() || !tratamento) {
       mostrarMensagem('Por favor, preencha seu nome e selecione como prefere ser tratado(a)', 'erro');
       return;
     }
     
-    // Salvar preferências (apenas uma vez)
     localStorage.setItem('nome_preferido', nomePreferido);
     localStorage.setItem('tratamento', tratamento);
     localStorage.setItem('usuario_configurado', 'true');
@@ -331,7 +323,6 @@ export default function DashboardMonitoria() {
     setEtapaBoasVindas('saudacao');
   };
 
-  // Função para fechar modal de boas-vindas
   const fecharBoasVindas = () => {
     setModalBoasVindas(false);
     setEtapaBoasVindas('pergunta');
@@ -339,21 +330,17 @@ export default function DashboardMonitoria() {
     setTratamento('');
   };
 
-  // Função para fazer download do relatório em CSV
   const downloadRelatorio = () => {
     try {
-      // Cabeçalho do CSV
       let csvContent = "data:text/csv;charset=utf-8,";
       csvContent += "Posição,Título,Tags,Total de Acessos\n";
       
-      // Dados do ranking
       metricas.ranking.slice(0, 5).forEach((item, index) => {
         csvContent += `${index + 1}º,"${item.titulo}","${item.tags}",${item.acessos}\n`;
       });
       
       csvContent += "\n\nAtendente,Comunicado Lido,Data e Hora\n";
       
-      // Dados da auditoria
       metricas.historico.forEach((log) => {
         const nomeAtendente = log.usuarios?.nome_completo || 'Usuário Desconhecido';
         const titulo = log.comunicados_oficiais?.titulo || 'Comunicado Apagado';
@@ -361,7 +348,6 @@ export default function DashboardMonitoria() {
         csvContent += `"${nomeAtendente}","${titulo}","${dataHora}"\n`;
       });
 
-      // Criar link de download
       const encodedUri = encodeURI(csvContent);
       const link = document.createElement("a");
       link.setAttribute("href", encodedUri);
@@ -389,7 +375,6 @@ export default function DashboardMonitoria() {
     const txt = document.createElement('textarea');
     txt.innerHTML = html;
     const decoded = txt.value;
-    // Sanitizar com DOMPurify para prevenir XSS
     return DOMPurify.sanitize(decoded, {
       ALLOWED_TAGS: ['p','br','strong','em','u','s','h1','h2','h3','h4','h5','h6','ul','ol','li','a','img','blockquote','code','pre','span','div','iframe','table','thead','tbody','tr','th','td','sub','sup','hr'],
       ALLOWED_ATTR: ['href','src','alt','title','class','style','target','width','height','allowfullscreen','frameborder','rel','colspan','rowspan'],
@@ -457,7 +442,6 @@ export default function DashboardMonitoria() {
       formData.append('titulo', titulo);
       formData.append('tags', tags);
 
-      // Montar conteúdo final com dicas de atenção embutidas
       const dicasValidas = dicas.filter(d => d.texto.trim());
       let conteudoFinal = conteudo;
 
@@ -478,7 +462,7 @@ export default function DashboardMonitoria() {
         conteudoFinal = dicasHTML + conteudo;
       }
 
-      // YouTube links
+      // YouTube links embutidos no conteúdo
       const youtubeLinks = midias.filter(m => m.tipo === 'youtube');
       if (youtubeLinks.length > 0) {
         const iframes = youtubeLinks.map(m =>

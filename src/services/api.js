@@ -1,13 +1,10 @@
 /**
- * Serviço centralizado para comunicação com a API
- * Gerencia autenticação, headers e tratamento de erros
+ * Serviço centralizado para comunicação com a API.
+ * Gerencia autenticação, headers e tratamento de erros.
  */
 
 const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:3000/api';
 
-/**
- * Função auxiliar para fazer requisições autenticadas
- */
 async function apiRequest(endpoint, options = {}) {
     const token = localStorage.getItem('token');
     
@@ -24,7 +21,6 @@ async function apiRequest(endpoint, options = {}) {
         config.headers['Authorization'] = `Bearer ${token}`;
     }
 
-    // Remover Content-Type se for FormData (upload de arquivos)
     if (options.body instanceof FormData) {
         delete config.headers['Content-Type'];
     }
@@ -32,9 +28,7 @@ async function apiRequest(endpoint, options = {}) {
     try {
         const response = await fetch(`${API_URL}${endpoint}`, config);
 
-        // Tratar erros de autenticação
         if (response.status === 401) {
-            // Token inválido ou expirado - limpar dados de autenticação e redirecionar
             localStorage.removeItem('token');
             localStorage.removeItem('usuario_id');
             localStorage.removeItem('usuario_nome');
@@ -43,17 +37,14 @@ async function apiRequest(endpoint, options = {}) {
             throw new Error('Sessão expirada. Faça login novamente.');
         }
 
-        // Tratar erro de permissão
         if (response.status === 403) {
             throw new Error('Você não tem permissão para esta ação.');
         }
 
-        // Tratar rate limiting
         if (response.status === 429) {
             throw new Error('Muitas requisições. Aguarde alguns minutos e tente novamente.');
         }
 
-        // Tratar outros erros
         if (!response.ok) {
             const errorData = await response.json().catch(() => ({}));
             throw new Error(errorData.erro || 'Erro ao processar requisição.');
@@ -69,9 +60,6 @@ async function apiRequest(endpoint, options = {}) {
  * Serviço de Autenticação
  */
 export const authService = {
-    /**
-     * Fazer login
-     */
     async login(email, password) {
         const response = await apiRequest('/auth/login', {
             method: 'POST',
@@ -80,7 +68,6 @@ export const authService = {
         
         const data = await response.json();
         
-        // Salvar token e dados do usuário
         localStorage.setItem('token', data.token);
         localStorage.setItem('usuario_id', data.usuario.id);
         localStorage.setItem('usuario_nome', data.usuario.nome);
@@ -90,7 +77,7 @@ export const authService = {
     },
 
     /**
-     * Fazer logout - notifica o backend e limpa dados locais
+     * Fazer logout — notifica o backend e limpa dados locais
      */
     async logout() {
         try {
@@ -105,7 +92,7 @@ export const authService = {
                 });
             }
         } catch {
-            // Mesmo se falhar, limpar dados locais
+            // Limpar dados locais mesmo se o backend falhar
         } finally {
             localStorage.removeItem('token');
             localStorage.removeItem('usuario_id');
@@ -122,9 +109,6 @@ export const authService = {
         return !!localStorage.getItem('token');
     },
 
-    /**
-     * Obter dados do usuário logado
-     */
     getUser() {
         return {
             id: localStorage.getItem('usuario_id'),
@@ -138,17 +122,12 @@ export const authService = {
  * Serviço de Comunicados
  */
 export const comunicadosService = {
-    /**
-     * Listar todos os comunicados
-     */
     async listar() {
         const response = await apiRequest('/comunicados');
-        return response.json();
+        const resultado = await response.json();
+        return resultado.data || resultado;
     },
 
-    /**
-     * Criar novo comunicado (apenas MONITOR_QUALIDADE)
-     */
     async criar(formData) {
         const response = await apiRequest('/comunicados', {
             method: 'POST',
@@ -157,9 +136,6 @@ export const comunicadosService = {
         return response.json();
     },
 
-    /**
-     * Atualizar comunicado
-     */
     async atualizar(id, formData) {
         const response = await apiRequest(`/comunicados/${id}`, {
             method: 'PUT',
@@ -168,9 +144,6 @@ export const comunicadosService = {
         return response.json();
     },
 
-    /**
-     * Deletar comunicado
-     */
     async deletar(id) {
         const response = await apiRequest(`/comunicados/${id}`, {
             method: 'DELETE'
@@ -178,9 +151,6 @@ export const comunicadosService = {
         return response.json();
     },
 
-    /**
-     * Curtir/descurtir comunicado
-     */
     async curtir(id) {
         const response = await apiRequest(`/comunicados/${id}/curtir`, {
             method: 'POST'
@@ -188,9 +158,6 @@ export const comunicadosService = {
         return response.json();
     },
 
-    /**
-     * Registrar leitura de comunicado
-     */
     async registrarLeitura(comunicadoId) {
         const response = await apiRequest('/comunicados/ler', {
             method: 'POST',
@@ -204,17 +171,11 @@ export const comunicadosService = {
  * Serviço de Scripts
  */
 export const scriptsService = {
-    /**
-     * Listar scripts do usuário e da equipe
-     */
     async listar() {
         const response = await apiRequest('/scripts');
         return response.json();
     },
 
-    /**
-     * Criar novo script
-     */
     async criar(formData) {
         const response = await apiRequest('/scripts', {
             method: 'POST',
@@ -223,9 +184,6 @@ export const scriptsService = {
         return response.json();
     },
 
-    /**
-     * Atualizar script
-     */
     async atualizar(id, formData) {
         const response = await apiRequest(`/scripts/${id}`, {
             method: 'PUT',
@@ -234,9 +192,6 @@ export const scriptsService = {
         return response.json();
     },
 
-    /**
-     * Deletar script
-     */
     async deletar(id) {
         const response = await apiRequest(`/scripts/${id}`, {
             method: 'DELETE'
@@ -249,17 +204,11 @@ export const scriptsService = {
  * Serviço de Notificações
  */
 export const notificacoesService = {
-    /**
-     * Listar notificações do usuário
-     */
     async listar() {
         const response = await apiRequest('/notificacoes');
         return response.json();
     },
 
-    /**
-     * Marcar notificação como lida
-     */
     async marcarComoLida(id) {
         const response = await apiRequest(`/notificacoes/${id}/ler`, {
             method: 'PUT'
@@ -272,9 +221,6 @@ export const notificacoesService = {
  * Serviço de Relatórios (apenas MONITOR_QUALIDADE)
  */
 export const relatoriosService = {
-    /**
-     * Obter métricas e relatórios
-     */
     async obterMetricas() {
         const response = await apiRequest('/relatorios');
         return response.json();
